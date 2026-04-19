@@ -1,0 +1,1003 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="description" content="Norma — Asistente de gestión institucional para directivos de primaria en Córdoba">
+<meta name="theme-color" content="#2B5BA8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src https://i.imgur.com data:; connect-src https://aulaclara.abfacundotorres.workers.dev https://api.groq.com;">
+<title>Norma — Asistente de Gestión Institucional</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@400;600&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+<noscript><link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@400;600&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet"></noscript>
+<script>
+  window._docxReady = false;
+  window._docxError = false;
+  const s = document.createElement('script');
+  s.src = 'https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.umd.js';
+  s.onload  = () => { window._docxReady = true; };
+  s.onerror = () => { window._docxError = true; };
+  document.head.appendChild(s);
+</script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --cream: #F0F4FB; --warm-white: #F8FAFF;
+    --orange: #2B5BA8; --orange-hover: #1E4A8F; --orange-light: #5B8DD9; --orange-pale: #E8EFFA;
+    --amber-pale: #EEF3FC; --brown-dark: #0F2044; --brown-mid: #2B5BA8; --brown-light: #5B8DD9;
+    --border: #C5D5EF; --green: #3A7D2C; --green-pale: #EAF3DE; --red: #B91C1C; --red-pale: #FEE2E2;
+  }
+  html, body { height: 100%; background: var(--cream); font-family: 'DM Sans', system-ui, sans-serif; color: var(--brown-dark); overflow: hidden; -webkit-font-smoothing: antialiased; }
+  body::before { content: ''; position: fixed; inset: 0; background-image: radial-gradient(circle at 20% 20%, rgba(232,160,32,0.08) 0%, transparent 50%), radial-gradient(circle at 80% 80%, rgba(217,95,26,0.07) 0%, transparent 50%); pointer-events: none; z-index: 0; }
+  .page { position: relative; z-index: 1; height: 100vh; display: flex; flex-direction: column; max-width: 680px; margin: 0 auto; padding: 14px 14px 0; }
+  .header { display: flex; align-items: center; gap: 12px; padding: 12px 18px; background: var(--warm-white); border: 1px solid var(--border); border-radius: 20px; margin-bottom: 10px; flex-shrink: 0; }
+  .avatar-ring { width: 54px; height: 54px; border-radius: 50%; background: var(--orange-pale); border: 2.5px solid var(--orange); display: flex; align-items: center; justify-content: center; flex-shrink: 0; overflow: hidden; font-size: 22px; }
+  .avatar-ring img { width: 50px; height: 50px; object-fit: cover; }
+  .header-text { flex: 1; min-width: 0; }
+  .header-name { font-family: 'Fraunces', Georgia, serif; font-size: 1.15rem; font-weight: 600; color: var(--brown-dark); line-height: 1.2; }
+  .header-sub { font-size: 11px; color: var(--brown-light); margin-top: 2px; white-space: normal; line-height: 1.3; }
+  .status-badge { display: flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 500; padding: 4px 10px; border-radius: 20px; white-space: nowrap; transition: background 0.3s, color 0.3s; }
+  .status-badge.online  { color: var(--green); background: var(--green-pale); }
+  .status-badge.offline { color: var(--red); background: var(--red-pale); }
+  .status-dot { width: 6px; height: 6px; border-radius: 50%; }
+  .status-badge.online  .status-dot { background: var(--green); animation: pulse 2.5s ease-in-out infinite; }
+  .status-badge.offline .status-dot { background: var(--red); }
+  @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(1.3); } }
+  .offline-banner { display: none; background: var(--red-pale); color: var(--red); border: 1px solid #FECACA; border-radius: 10px; padding: 8px 14px; font-size: 12px; text-align: center; margin-bottom: 8px; flex-shrink: 0; }
+  .offline-banner.visible { display: block; }
+  .messages { flex: 1; overflow-y: auto; padding: 6px 2px 14px; display: flex; flex-direction: column; gap: 12px; scroll-behavior: smooth; overscroll-behavior: contain; }
+  .messages::-webkit-scrollbar { width: 4px; }
+  .messages::-webkit-scrollbar-track { background: transparent; }
+  .messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  .msg-row { display: flex; gap: 9px; animation: slideUp 0.22s ease-out both; }
+  @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+  .msg-row.user { flex-direction: row-reverse; }
+  .msg-avatar { width: 48px; height: 48px; border-radius: 50%; background: var(--orange-pale); border: 2px solid var(--border); display: flex; align-items: center; justify-content: center; flex-shrink: 0; overflow: hidden; align-self: flex-start; font-size: 20px; }
+  .msg-avatar img { width: 44px; height: 44px; object-fit: cover; border-radius: 50%; }
+  .bubble-wrap { display: flex; flex-direction: column; gap: 4px; max-width: 78%; }
+  .msg-row.user .bubble-wrap { align-items: flex-end; }
+  .bubble { padding: 10px 15px; border-radius: 18px; font-size: 14px; line-height: 1.65; word-break: break-word; }
+  .msg-row.bot .bubble { background: var(--warm-white); border: 1px solid var(--border); color: var(--brown-dark); border-bottom-left-radius: 5px; }
+  .msg-row.user .bubble { background: var(--orange); color: #FFF8F0; border-bottom-right-radius: 5px; }
+  .bubble strong { font-weight: 500; }
+  .bubble em { font-style: italic; opacity: 0.85; }
+  .bubble p { margin: 0 0 6px; }
+  .bubble p:last-child { margin-bottom: 0; }
+  .bubble ul, .bubble ol { padding-left: 20px; margin: 6px 0; }
+  .bubble li { margin-bottom: 4px; }
+  .bubble ul li { list-style-type: disc; }
+  .bubble ol li { list-style-type: decimal; }
+  .bubble hr { border: none; border-top: 1px solid var(--border); margin: 10px 0; }
+
+  /* Barra de progreso Plan Anual */
+  .plan-progress { display: none; background: var(--warm-white); border: 1px solid var(--border); border-radius: 14px; padding: 10px 16px; margin-bottom: 8px; flex-shrink: 0; }
+  .plan-progress.visible { display: block; }
+  .plan-progress-label { font-size: 11px; color: var(--brown-mid); margin-bottom: 6px; font-weight: 500; }
+  .plan-progress-steps { display: flex; gap: 8px; }
+  .plan-step { flex: 1; height: 6px; border-radius: 3px; background: var(--border); transition: background 0.3s; }
+  .plan-step.done    { background: var(--green); }
+  .plan-step.current { background: var(--orange); }
+
+  .bubble-actions { display: flex; gap: 6px; padding: 0 4px; flex-wrap: wrap; }
+  .action-btn { display: flex; align-items: center; gap: 4px; font-size: 11px; padding: 4px 10px; background: transparent; border: 1px solid var(--border); border-radius: 12px; cursor: pointer; color: var(--brown-light); transition: background 0.15s, color 0.15s; font-family: 'DM Sans', system-ui, sans-serif; }
+  .action-btn:hover { background: var(--orange-pale); color: var(--orange); border-color: var(--orange); }
+  .action-btn.download { background: var(--orange); color: #FFF8F0; border-color: var(--orange); font-weight: 500; }
+  .action-btn.download:hover { background: var(--orange-hover); }
+  .action-btn.download-full { background: var(--green); border-color: var(--green); color: #FFF8F0; font-weight: 500; }
+  .action-btn.download-full:hover { background: #2d6624; }
+  .action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .typing-row { display: none; }
+  .typing-row.visible { display: flex; }
+  .typing-dots { display: flex; gap: 5px; align-items: center; padding: 11px 15px; background: var(--warm-white); border: 1px solid var(--border); border-radius: 18px; border-bottom-left-radius: 5px; }
+  .typing-dots span { width: 7px; height: 7px; background: var(--orange-light); border-radius: 50%; animation: bounce 1.3s ease-in-out infinite; opacity: 0.4; }
+  .typing-dots span:nth-child(2) { animation-delay: 0.15s; }
+  .typing-dots span:nth-child(3) { animation-delay: 0.30s; }
+  @keyframes bounce { 0%, 60%, 100% { transform: translateY(0); opacity: 0.4; } 30% { transform: translateY(-7px); opacity: 1; } }
+
+  .input-area { padding: 10px 0 14px; flex-shrink: 0; }
+  .input-wrap { display: flex; gap: 8px; align-items: flex-end; background: var(--warm-white); border: 1.5px solid var(--border); border-radius: 24px; padding: 8px 8px 8px 16px; transition: border-color 0.2s; }
+  .input-wrap:focus-within { border-color: var(--orange); }
+  #userInput { flex: 1; border: none; outline: none; background: transparent; font-family: 'DM Sans', system-ui, sans-serif; font-size: 14px; color: var(--brown-dark); resize: none; min-height: 22px; max-height: 110px; line-height: 1.5; padding: 2px 0; }
+  #userInput::placeholder { color: var(--brown-light); opacity: 0.55; }
+  .input-footer { display: flex; justify-content: flex-end; padding: 3px 6px 0; }
+  .char-count { font-size: 10px; color: var(--brown-light); opacity: 0.5; transition: color 0.2s, opacity 0.2s; }
+  .char-count.warn  { color: #B45309; opacity: 0.9; }
+  .char-count.limit { color: var(--red); opacity: 1; }
+  .send-btn { width: 38px; height: 38px; border-radius: 50%; background: var(--orange); border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: background 0.15s, transform 0.1s; }
+  .send-btn:hover:not(:disabled) { background: var(--orange-hover); }
+  .send-btn:active:not(:disabled) { transform: scale(0.92); }
+  .send-btn:disabled { background: var(--border); cursor: not-allowed; }
+  .send-btn svg { fill: #FFF8F0; width: 15px; height: 15px; }
+  .disclaimer { text-align: center; font-size: 10px; color: var(--brown-light); opacity: 0.5; padding: 5px 0 3px; line-height: 1.4; }
+  .suggestions { display: flex; gap: 7px; flex-wrap: wrap; padding-bottom: 2px; }
+  .chip { font-size: 12px; padding: 5px 11px; background: var(--amber-pale); color: var(--brown-mid); border: 1px solid var(--border); border-radius: 20px; cursor: pointer; transition: background 0.15s, opacity 0.15s; font-family: 'DM Sans', system-ui, sans-serif; line-height: 1.4; }
+  .chip:hover { background: var(--orange-pale); }
+  .chip:disabled { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
+  .toast { position: fixed; bottom: 88px; left: 50%; transform: translateX(-50%) translateY(8px); background: var(--brown-dark); color: #FFF8F0; padding: 8px 18px; border-radius: 20px; font-size: 13px; opacity: 0; transition: opacity 0.25s, transform 0.25s; pointer-events: none; z-index: 100; white-space: nowrap; max-width: 90vw; text-align: center; }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  @media (max-width: 480px) {
+    .page { padding: 8px 8px 0; }
+    .header { padding: 10px 13px; border-radius: 16px; }
+    .header-name { font-size: 1.05rem; }
+    .bubble { font-size: 13px; }
+    .bubble-wrap { max-width: 82%; }
+    .msg-avatar { width: 44px; height: 44px; }
+    .msg-avatar img { width: 40px; height: 40px; }
+    .suggestions { gap: 6px; }
+    .chip { font-size: 11px; padding: 5px 10px; }
+    .toast { bottom: 80px; font-size: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<!-- Pantalla de acceso PIN -->
+<div id="pinScreen" style="
+  position:fixed; inset:0; z-index:200;
+  background:var(--cream);
+  display:flex; align-items:center; justify-content:center;
+  padding:20px;
+">
+  <div style="
+    background:var(--warm-white); border:1px solid var(--border);
+    border-radius:24px; padding:32px 28px; max-width:360px; width:100%;
+    text-align:center; box-shadow:0 4px 24px rgba(61,31,10,0.08);
+  ">
+    <img src="https://i.imgur.com/oXWWZA8.png" alt="Norma"
+      style="width:200px; height:200px; object-fit:contain; margin-bottom:16px; display:block; margin-left:auto; margin-right:auto;"
+      onerror="this.style.display='none'">
+    <div style="font-size:13px; color:var(--brown-light); margin-bottom:24px; line-height:1.5;">Ingresá tu código de acceso institucional</div>
+    <input id="pinInput" type="text" placeholder="Ej: JESUSMARIA2026"
+      maxlength="20" autocomplete="off" spellcheck="false"
+      style="
+        width:100%; padding:12px 16px; border:1.5px solid var(--border);
+        border-radius:14px; font-size:15px; font-family:'DM Sans',system-ui,sans-serif;
+        text-align:center; text-transform:uppercase; letter-spacing:2px;
+        background:var(--cream); color:var(--brown-dark); outline:none;
+        transition:border-color 0.2s; margin-bottom:8px;
+      "
+    >
+    <div id="pinError" style="font-size:12px; color:var(--red); min-height:18px; margin-bottom:12px;"></div>
+    <button id="pinBtn" onclick="submitPin()" style="
+      width:100%; padding:13px; background:var(--orange); color:#FFF8F0;
+      border:none; border-radius:14px; font-size:15px; font-weight:500;
+      font-family:'DM Sans',system-ui,sans-serif; cursor:pointer;
+      transition:background 0.15s;
+    ">Ingresar</button>
+    <div style="font-size:11px; color:var(--brown-light); opacity:0.5; margin-top:16px;">
+      Si no tenés código, contactá a tu institución.
+    </div>
+  </div>
+</div>
+
+<div class="page" id="mainPage" style="display:none;">
+  <header class="header" role="banner">
+    <div class="avatar-ring" id="avatarRing">
+      <img src="https://i.imgur.com/erkEVyf.png" alt="Clara"
+           onerror="this.style.display='none'; document.getElementById('avatarRing').textContent='👩‍🏫';">
+    </div>
+    <div class="header-text">
+      <div class="header-name">Norma</div>
+      <div class="header-sub">Asistente de gestión · Directivos · Primaria Córdoba</div>
+    </div>
+    <div class="status-badge online" id="statusBadge">
+      <div class="status-dot"></div>
+      <span id="statusText">En línea</span>
+    </div>
+    <button id="newChatBtn" title="Nueva consulta" onclick="resetChat()" style="
+      width:34px;height:34px;border-radius:50%;border:1.5px solid var(--border);
+      background:var(--warm-white);cursor:pointer;display:flex;align-items:center;
+      justify-content:center;flex-shrink:0;transition:background 0.15s;
+      font-size:15px;color:var(--brown-light);
+    " aria-label="Nueva consulta">↺</button>
+  </header>
+
+  <div class="offline-banner" id="offlineBanner" role="alert">
+    Sin conexión a internet. Revisá tu red para continuar.
+  </div>
+
+  <!-- Barra de progreso Plan Anual -->
+  <div class="plan-progress" id="planProgress">
+    <div class="plan-progress-label" id="planProgressLabel">Plan Anual — Generando período 1 de 3</div>
+    <div class="plan-progress-steps">
+      <div class="plan-step" id="planStep1"></div>
+      <div class="plan-step" id="planStep2"></div>
+      <div class="plan-step" id="planStep3"></div>
+    </div>
+  </div>
+
+  <main class="messages" id="messages" role="log" aria-live="polite">
+    <div class="msg-row bot">
+      <div class="msg-avatar">
+        <img src="https://i.imgur.com/erkEVyf.png" alt=""
+             onerror="this.style.display='none'; this.parentNode.textContent='👩‍🏫';">
+      </div>
+      <div class="bubble-wrap">
+        <div class="bubble">
+          <p>¡Hola! Soy <strong>Norma</strong> 🗂️</p>
+          <p>Directora con 25 años de experiencia en primaria cordobesa. Estoy acá para simplificarte la gestión — actas, comunicados, proyectos institucionales y todo lo que necesites. 📋</p>
+          <p>¿Cómo te llamás y cuál es tu cargo?</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="suggestions" id="suggestions">
+      <button class="chip" onclick="sendSuggestion('Soy directora')">Directora/Director</button>
+      <button class="chip" onclick="sendSuggestion('Soy vicedirectora')">Vicedirector/a</button>
+      <button class="chip" onclick="sendSuggestion('Soy del equipo de conducción')">Equipo de conducción</button>
+    </div>
+
+    <div class="typing-row" id="typingRow">
+      <div class="msg-avatar">
+        <img src="https://i.imgur.com/erkEVyf.png" alt=""
+             onerror="this.style.display='none'; this.parentNode.textContent='👩‍🏫';">
+      </div>
+      <div class="typing-dots" aria-hidden="true">
+        <span></span><span></span><span></span>
+      </div>
+    </div>
+  </main>
+
+  <div class="input-area">
+    <div class="input-wrap">
+      <textarea id="userInput" placeholder="Escribí tu consulta..."
+        rows="1" maxlength="2000" aria-label="Escribí tu consulta"
+        autocomplete="off" spellcheck="true"></textarea>
+      <button class="send-btn" id="sendBtn" aria-label="Enviar" disabled>
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <path d="m12.14 8.753-5.482 4.796c-.646.566-1.658.106-1.658-.753V3.204a1 1 0 0 1 1.659-.753l5.48 4.796a1 1 0 0 1 0 1.506z"/>
+        </svg>
+      </button>
+    </div>
+    <div class="input-footer">
+      <span class="char-count" id="charCount" aria-live="polite"></span>
+    </div>
+    <div class="disclaimer">
+      Norma puede cometer errores. Verificá la información y la normativa vigente antes de usar los documentos.
+    </div>
+  </div>
+</div>
+</div>
+
+<script>
+const WORKER_URL     = 'https://norma-aulaclara.abfacundotorres.workers.dev';
+const MAX_CHARS      = 2000;
+const MAX_RETRY      = 2;
+const RETRY_BASE     = 1200;
+const CLIENT_TIMEOUT = 33000;
+const HISTORY_LIMIT  = 16;
+
+function isDocumentText(text) {
+  return text.includes('[TITULO]') || text.includes('[FIN_DOCUMENTO]') || text.includes('[PERIODO_');
+}
+
+const $ = id => document.getElementById(id);
+const messagesEl    = $('messages');
+const typingRow     = $('typingRow');
+const inputEl       = $('userInput');
+const sendBtn       = $('sendBtn');
+const suggestEl     = $('suggestions');
+const toastEl       = $('toast');
+const charCountEl   = $('charCount');
+const statusBadge   = $('statusBadge');
+const statusText    = $('statusText');
+const offlineBanner = $('offlineBanner');
+const planProgress  = $('planProgress');
+const planProgressLabel = $('planProgressLabel');
+
+let history   = [];
+let isLoading = false;
+let toastTimer;
+let sessionPin = null; // PIN del municipio
+
+// ── Estado Plan Anual ───────────────────────────────────────────
+// Acumula los 3 períodos hasta tener el plan completo
+const planAnual = {
+  active:   false,
+  periodo0: null, // intro: datos + fundamentación + propósitos
+  periodo1: null,
+  periodo2: null,
+  periodo3: null,
+  reset() {
+    this.active   = false;
+    this.periodo0 = null;
+    this.periodo1 = null;
+    this.periodo2 = null;
+    this.periodo3 = null;
+    planProgress.classList.remove('visible');
+  },
+  getPeriodosCompletos() {
+    // Contamos períodos 1-3 (no el 0 que es intro)
+    return [this.periodo1, this.periodo2, this.periodo3].filter(Boolean).length;
+  },
+  getFullContent() {
+    const p0 = this.periodo0 || '';
+    const p1 = this.periodo1 || '';
+    const p2 = this.periodo2 || '';
+    const p3 = this.periodo3 || '';
+
+    // Extraer título del período 0
+    const titleMatch = p0.match(/\[TITULO\]\s*(.+)/);
+    const titulo = titleMatch ? titleMatch[1].trim() : 'Plan Anual';
+
+    // Extraer cuerpo de cada parte (sin marcas de periodo/titulo/fin)
+    const extractBody = (text) => text
+      .replace(/\[PERIODO_\d\]\s*/g, '')
+      .replace(/\[TITULO\][^\n]*\n?/g, '')
+      .replace(/\[FIN_DOCUMENTO\]/g, '')
+      .trim();
+
+    const body0 = extractBody(p0);
+    const body1 = extractBody(p1);
+    const body2 = extractBody(p2);
+    const body3 = extractBody(p3);
+
+    return `[TITULO] ${titulo}\n${body0}\n${body1}\n${body2}\n${body3}\n[FIN_DOCUMENTO]`;
+  }
+};
+
+function updatePlanProgress(parte) {
+  // parte: 0=intro, 1=p1, 2=p2, 3=p3
+  planProgress.classList.add('visible');
+  const labels = ['Introducción lista','Período 1 listo','Período 2 listo','Plan Anual completo ✅'];
+  const steps = ['planStep1','planStep2','planStep3'];
+  // Mapear parte (0-3) a progreso visual (0-3)
+  steps.forEach((id, i) => {
+    const el = $(id);
+    if (i < parte)      { el.className = 'plan-step done'; }
+    else if (i === parte - 1 || (parte === 0 && i === 0)) { el.className = 'plan-step current'; }
+    else                 { el.className = 'plan-step'; }
+  });
+  if (parte === 0) {
+    $('planStep1').className = 'plan-step current';
+    $('planStep2').className = 'plan-step';
+    $('planStep3').className = 'plan-step';
+    planProgressLabel.textContent = 'Plan Anual — Introducción generada';
+  } else if (parte >= 3) {
+    $('planStep1').className = 'plan-step done';
+    $('planStep2').className = 'plan-step done';
+    $('planStep3').className = 'plan-step done';
+    planProgressLabel.textContent = '¡Plan Anual completo — listo para descargar! ✅';
+  } else {
+    planProgressLabel.textContent = `Plan Anual — Período ${parte} de 3 generado`;
+  }
+}
+
+// ── Formato de texto ────────────────────────────────────────────
+
+function escapeHTML(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+            .replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+}
+
+function applyInline(text) {
+  return text
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*([^*]+)\*/g,     '<em>$1</em>')
+    .replace(/_([^_]+)_/g,       '<em>$1</em>');
+}
+
+function formatText(raw) {
+  const cleaned = raw
+    .replace(/\[PERIODO_\d\]\s*/g, '')
+    .replace(/\[TITULO\]\s*/g,     '')
+    .replace(/\[SECCION\]\s*/g,    '### ')
+    .replace(/\[SUBSECCION\]\s*/g, '#### ')
+    .replace(/\[CAMPO\]\s*/g,      '')
+    .replace(/\[TEXTO\]\s*/g,      '')
+    .replace(/\[LISTA\]\s*/g,      '• ')
+    .replace(/\[SEPARADOR\]/g,     '\n---\n')
+    .replace(/\[FIN_DOCUMENTO\]/g, '');
+
+  const lines  = cleaned.split('\n');
+  const result = [];
+  let inUl = false, inOl = false, paraBuffer = [];
+
+  function flushPara() {
+    if (!paraBuffer.length) return;
+    result.push(`<p>${paraBuffer.join('<br>')}</p>`);
+    paraBuffer = [];
+  }
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    const escaped = escapeHTML(trimmed);
+
+    if (trimmed === '---') {
+      flushPara();
+      if (inUl) { result.push('</ul>'); inUl = false; }
+      if (inOl) { result.push('</ol>'); inOl = false; }
+      result.push('<hr>');
+      continue;
+    }
+    if (trimmed.startsWith('### ')) {
+      flushPara();
+      if (inUl) { result.push('</ul>'); inUl = false; }
+      if (inOl) { result.push('</ol>'); inOl = false; }
+      result.push(`<p><strong style="color:var(--orange)">${applyInline(escapeHTML(trimmed.slice(4)))}</strong></p>`);
+      continue;
+    }
+    if (trimmed.startsWith('#### ')) {
+      flushPara();
+      result.push(`<p><strong style="color:var(--brown-mid)">${applyInline(escapeHTML(trimmed.slice(5)))}</strong></p>`);
+      continue;
+    }
+
+    const ulMatch = escaped.match(/^•\s+(.+)/);
+    const olMatch = escaped.match(/^\d+\.\s+(.+)/);
+
+    if (ulMatch) {
+      flushPara();
+      if (!inUl) { if (inOl) { result.push('</ol>'); inOl = false; } result.push('<ul>'); inUl = true; }
+      result.push(`<li>${applyInline(ulMatch[1])}</li>`);
+    } else if (olMatch) {
+      flushPara();
+      if (!inOl) { if (inUl) { result.push('</ul>'); inUl = false; } result.push('<ol>'); inOl = true; }
+      result.push(`<li>${applyInline(olMatch[1])}</li>`);
+    } else {
+      if (inUl) { result.push('</ul>'); inUl = false; }
+      if (inOl) { result.push('</ol>'); inOl = false; }
+      if (escaped === '') { flushPara(); }
+      else { paraBuffer.push(applyInline(escaped)); }
+    }
+  }
+
+  flushPara();
+  if (inUl) result.push('</ul>');
+  if (inOl) result.push('</ol>');
+  return result.join('');
+}
+
+// ── Generación Word ─────────────────────────────────────────────
+
+function parseDocumentContent(raw) {
+  // Normalizar: unir líneas donde la marca está sola y el contenido viene en la siguiente
+  // Ej: "[LISTA]\nContenido" → "[LISTA] Contenido"
+  const normalized = raw
+    .replace(/\[PERIODO_\d\]\s*/g, '')
+    .replace(/^(\s*)[-•]\s+/gm, '$1[LISTA] ');  // Solo líneas que arrancan con bullet
+
+  const lines = normalized.split('\n');
+  const documents = [];
+  let currentDoc = null, currentSection = null, currentSubsection = null;
+  let lastTag = null; // para capturar contenido huérfano
+
+  for (const line of lines) {
+    const t = line.trim();
+    if (!t) continue;
+
+    if (t === '[FIN_DOCUMENTO]') {
+      if (currentDoc) documents.push(currentDoc);
+      currentDoc = null; currentSection = null; currentSubsection = null; lastTag = null;
+    } else if (t === '[SEPARADOR]') {
+      if (currentDoc) documents.push(currentDoc);
+      currentDoc = null; currentSection = null; currentSubsection = null; lastTag = null;
+    } else if (t.startsWith('[TITULO]')) {
+      const titulo = t.replace('[TITULO]','').trim();
+      if (titulo) currentDoc = { titulo, sections: [] };
+      currentSection = null; currentSubsection = null;
+    } else if (t.startsWith('[SECCION]') && currentDoc) {
+      currentSubsection = null;
+      const title = t.replace('[SECCION]','').trim();
+      if (title) { currentSection = { title, items: [] }; currentDoc.sections.push(currentSection); }
+    } else if (t.startsWith('[SUBSECCION]') && currentSection) {
+      const title = t.replace('[SUBSECCION]','').trim();
+      if (title) {
+        currentSubsection = { title, items: [] };
+        currentSection.items.push({ type: 'subsection', data: currentSubsection });
+      }
+    } else if (t.startsWith('[CAMPO]')) {
+      const text = t.replace('[CAMPO]','').trim();
+      const target = currentSubsection || currentSection;
+      if (target && text) target.items.push({ type: 'field', text });
+      lastTag = text ? null : 'campo';
+    } else if (t.startsWith('[TEXTO]')) {
+      const text = t.replace('[TEXTO]','').trim();
+      const target = currentSubsection || currentSection;
+      if (target && text) target.items.push({ type: 'text', text });
+      lastTag = text ? null : 'texto';
+    } else if (t.startsWith('[LISTA]')) {
+      const text = t.replace('[LISTA]','').trim();
+      const target = currentSubsection || currentSection;
+      if (target && text) target.items.push({ type: 'bullet', text });
+      lastTag = text ? null : 'lista';
+    } else if (lastTag && currentDoc) {
+      // Contenido huérfano — pertenece a la última marca
+      const target = currentSubsection || currentSection;
+      if (target && t && !t.startsWith('[')) {
+        const typeMap = { lista: 'bullet', texto: 'text', campo: 'field' };
+        target.items.push({ type: typeMap[lastTag] || 'text', text: t });
+      }
+      lastTag = null;
+    }
+  }
+  if (currentDoc) documents.push(currentDoc);
+  return documents;
+}
+
+function makeFilename(raw) {
+  const titleMatch = raw.match(/\[TITULO\]\s*(.+)/);
+  const base = titleMatch ? titleMatch[1].trim() : 'aulaclara';
+  return base
+    .toLowerCase()
+    .replace(/[áä]/g,'a').replace(/[éë]/g,'e').replace(/[íï]/g,'i')
+    .replace(/[óö]/g,'o').replace(/[úü]/g,'u').replace(/ñ/g,'n')
+    .replace(/[^\w\s\-]/g,'').replace(/\s+/g,'_').slice(0,60) + '.docx';
+}
+
+async function generateWordDocument(rawContent) {
+  if (window._docxError) throw new Error('La librería Word no pudo cargar. Recargá la página.');
+  if (!window._docxReady || typeof window.docx === 'undefined') {
+    throw new Error('La librería Word todavía está cargando. Esperá unos segundos.');
+  }
+
+  const { Document, Packer, Paragraph, TextRun, HeadingLevel,
+          AlignmentType, LevelFormat, BorderStyle, PageBreak } = window.docx;
+
+  // Limpiar marcas [PERIODO_X] antes de parsear
+  const cleanRaw = rawContent.replace(/\[PERIODO_\d\]\s*/g, '');
+  const documents = parseDocumentContent(cleanRaw);
+  if (!documents.length) throw new Error('No se encontró contenido para generar.');
+
+  const allChildren = [];
+  const numbering = {
+    config: [{ reference: 'bullets', levels: [{
+      level: 0, format: LevelFormat.BULLET, text: '•', alignment: AlignmentType.LEFT,
+      style: { paragraph: { indent: { left: 720, hanging: 360 } } }
+    }] }],
+  };
+
+  documents.forEach((docData, idx) => {
+    if (idx > 0) allChildren.push(new Paragraph({ children: [new PageBreak()] }));
+
+    allChildren.push(new Paragraph({
+      heading: HeadingLevel.HEADING_1,
+      children: [new TextRun({ text: docData.titulo, bold: true, size: 34, font: 'Arial' })],
+      spacing: { after: 200 },
+    }));
+    allChildren.push(new Paragraph({
+      border: { bottom: { style: BorderStyle.SINGLE, size: 8, color: 'D95F1A', space: 1 } },
+      spacing: { after: 160 }, children: [],
+    }));
+    allChildren.push(new Paragraph({
+      children: [new TextRun({
+        text: `Generado por Aula Clara · ${new Date().toLocaleDateString('es-AR')}`,
+        size: 18, color: 'C47A3A', font: 'Arial', italics: true,
+      })],
+      spacing: { after: 320 },
+    }));
+
+    for (const section of docData.sections) {
+      allChildren.push(new Paragraph({
+        heading: HeadingLevel.HEADING_2,
+        children: [new TextRun({ text: section.title, bold: true, size: 26, font: 'Arial', color: 'D95F1A' })],
+        spacing: { before: 320, after: 100 },
+      }));
+      for (const item of section.items) pushItemToDoc(allChildren, item, numbering);
+    }
+
+    // Líneas observaciones
+    allChildren.push(new Paragraph({ spacing: { before: 480 }, children: [] }));
+    allChildren.push(new Paragraph({
+      border: { top: { style: BorderStyle.SINGLE, size: 4, color: 'EDD5B0', space: 1 } },
+      spacing: { after: 100 }, children: [],
+    }));
+    allChildren.push(new Paragraph({
+      children: [new TextRun({ text: 'Observaciones:', size: 20, bold: true, font: 'Arial', color: 'C47A3A' })],
+      spacing: { after: 160 },
+    }));
+    for (let i = 0; i < 3; i++) {
+      allChildren.push(new Paragraph({
+        border: { bottom: { style: BorderStyle.SINGLE, size: 2, color: 'EDD5B0', space: 1 } },
+        spacing: { after: 240 },
+        children: [new TextRun({ text: ' ', size: 22 })],
+      }));
+    }
+  });
+
+  const doc = new Document({
+    numbering,
+    styles: {
+      default: { document: { run: { font: 'Arial', size: 22 } } },
+      paragraphStyles: [
+        { id: 'Heading1', name: 'Heading 1', basedOn: 'Normal', next: 'Normal', quickFormat: true,
+          run: { size: 34, bold: true, font: 'Arial', color: '3D1F0A' },
+          paragraph: { spacing: { before: 0, after: 200 }, outlineLevel: 0 } },
+        { id: 'Heading2', name: 'Heading 2', basedOn: 'Normal', next: 'Normal', quickFormat: true,
+          run: { size: 26, bold: true, font: 'Arial', color: 'D95F1A' },
+          paragraph: { spacing: { before: 320, after: 100 }, outlineLevel: 1 } },
+        { id: 'Heading3', name: 'Heading 3', basedOn: 'Normal', next: 'Normal', quickFormat: true,
+          run: { size: 23, bold: true, font: 'Arial', color: '7A3B10' },
+          paragraph: { spacing: { before: 180, after: 80 }, outlineLevel: 2 } },
+      ],
+    },
+    sections: [{
+      properties: { page: { size: { width: 11906, height: 16838 }, margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 } } },
+      children: allChildren,
+    }],
+  });
+
+  const blob = await Packer.toBlob(doc);
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = makeFilename(rawContent); a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 3000);
+}
+
+function pushItemToDoc(children, item, numbering) {
+  const { Paragraph, TextRun, HeadingLevel } = window.docx;
+  if (item.type === 'subsection') {
+    children.push(new Paragraph({
+      heading: HeadingLevel.HEADING_3,
+      children: [new TextRun({ text: item.data.title, bold: true, size: 23, font: 'Arial', color: '7A3B10' })],
+      spacing: { before: 180, after: 80 },
+    }));
+    for (const sub of item.data.items) pushItemToDoc(children, sub, numbering);
+    return;
+  }
+  if (item.type === 'field') {
+    const parts = item.text.split(':');
+    children.push(new Paragraph({
+      children: [
+        new TextRun({ text: (parts[0]||'') + ': ', bold: true, size: 22, font: 'Arial' }),
+        new TextRun({ text: parts.slice(1).join(':').trim(), size: 22, font: 'Arial' }),
+      ],
+      spacing: { after: 80 },
+    }));
+  } else if (item.type === 'text') {
+    children.push(new Paragraph({
+      children: [new TextRun({ text: item.text, size: 22, font: 'Arial' })],
+      spacing: { after: 120 },
+    }));
+  } else if (item.type === 'bullet') {
+    children.push(new Paragraph({
+      numbering: { reference: 'bullets', level: 0 },
+      children: [new TextRun({ text: item.text, size: 22, font: 'Arial' })],
+      spacing: { after: 80 },
+    }));
+  }
+}
+
+// ── UI helpers ──────────────────────────────────────────────────
+
+function scrollBottom() { requestAnimationFrame(() => { messagesEl.scrollTop = messagesEl.scrollHeight; }); }
+
+function showToast(msg, duration = 3500) {
+  clearTimeout(toastTimer);
+  toastEl.textContent = msg; toastEl.classList.add('show');
+  toastTimer = setTimeout(() => toastEl.classList.remove('show'), duration);
+}
+
+function autoResize() {
+  inputEl.style.height = 'auto';
+  inputEl.style.height = Math.min(inputEl.scrollHeight, 110) + 'px';
+}
+
+function updateCharCount() {
+  const len = inputEl.value.length, left = MAX_CHARS - len;
+  charCountEl.textContent = left > 300 ? '' : `${left} caracteres restantes`;
+  charCountEl.className = `char-count${left <= 300 ? (left < 50 ? ' limit' : ' warn') : ''}`;
+  sendBtn.disabled = len === 0 || isLoading;
+}
+
+function setChipsDisabled(disabled) {
+  suggestEl?.querySelectorAll('.chip').forEach(c => { c.disabled = disabled; });
+}
+
+function makeDownloadBtn(rawContent, isFullPlan = false) {
+  const btn = document.createElement('button');
+  btn.className = `action-btn ${isFullPlan ? 'download-full' : 'download'}`;
+  btn.innerHTML = isFullPlan ? '⬇️ Descargar Plan Anual completo' : '⬇️ Descargar Word';
+  btn.onclick = async () => {
+    if (window._docxError) { showToast('Librería Word no disponible. Recargá la página.'); return; }
+    btn.innerHTML = '⏳ Generando...'; btn.disabled = true;
+    try {
+      await generateWordDocument(rawContent);
+      btn.innerHTML = isFullPlan ? '✅ Plan Anual descargado' : '✅ Descargado';
+      setTimeout(() => { btn.innerHTML = isFullPlan ? '⬇️ Descargar Plan Anual completo' : '⬇️ Descargar Word'; btn.disabled = false; }, 3000);
+    } catch (err) {
+      btn.innerHTML = '❌ Error'; btn.disabled = false;
+      showToast(err.message || 'Error al generar el documento.');
+    }
+  };
+  return btn;
+}
+
+function appendMessage(text, role) {
+  const isPeriodo1 = text.includes('[PERIODO_1]');
+  const isPeriodo2 = text.includes('[PERIODO_2]');
+  const isPeriodo3 = text.includes('[PERIODO_3]');
+  const hasDocument = text.includes('[FIN_DOCUMENTO]');
+
+  // Detectar y acumular períodos del Plan Anual
+  const isPeriodo0 = text.includes('[PERIODO_0]');
+  if (isPeriodo0) { planAnual.active = true; planAnual.periodo0 = text; updatePlanProgress(0); }
+  if (isPeriodo1) { planAnual.periodo1 = text; updatePlanProgress(1); }
+  if (isPeriodo2) { planAnual.periodo2 = text; updatePlanProgress(2); }
+  if (isPeriodo3) { planAnual.periodo3 = text; updatePlanProgress(3); }
+
+  const row = document.createElement('div');
+  row.classList.add('msg-row', role);
+
+  const av = document.createElement('div');
+  av.className = 'msg-avatar';
+  av.setAttribute('aria-hidden', 'true');
+
+  if (role === 'bot') {
+    const img = document.createElement('img');
+    img.src = 'https://i.imgur.com/erkEVyf.png'; img.alt = '';
+    img.onerror = () => { img.style.display='none'; av.textContent='👩‍🏫'; };
+    av.appendChild(img);
+  } else {
+    av.innerHTML = '<svg style="width:20px;height:20px;fill:#C47A3A" viewBox="0 0 16 16"><path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm2-3a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm4 8c0 1-1 1-1 1H3s-1 0-1-1 1-4 6-4 6 3 6 4zm-1-.004c-.001-.246-.154-.986-.832-1.664C11.516 10.68 10.289 10 8 10c-2.29 0-3.516.68-4.168 1.332-.678.678-.83 1.418-.832 1.664h10z"/></svg>';
+  }
+
+  const wrap = document.createElement('div');
+  wrap.className = 'bubble-wrap';
+
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+  bubble.innerHTML = formatText(text);
+  wrap.appendChild(bubble);
+
+  if (role === 'bot') {
+    const actions = document.createElement('div');
+    actions.className = 'bubble-actions';
+
+    // Botón copiar siempre
+    const copyBtn = document.createElement('button');
+    copyBtn.className = 'action-btn';
+    copyBtn.innerHTML = '📋 Copiar';
+    copyBtn.onclick = () => {
+      const plain = text.replace(/\[.*?\]/g,'').trim();
+      navigator.clipboard.writeText(plain)
+        .then(()  => { copyBtn.innerHTML='✅ Copiado'; setTimeout(()=>{copyBtn.innerHTML='📋 Copiar';},2000); })
+        .catch(()  => showToast('No se pudo copiar'));
+    };
+    actions.appendChild(copyBtn);
+
+    // Para períodos del Plan Anual
+    const isPeriodo0 = text.includes('[PERIODO_0]');
+
+    // Período 0 (intro): sin botón de descarga individual, es solo el marco
+    // Períodos 1 y 2: botón para descargar ese período
+    if ((isPeriodo1 || isPeriodo2) && hasDocument) {
+      const periodoNum = isPeriodo1 ? 1 : 2;
+      const periodoBtn = makeDownloadBtn(text);
+      periodoBtn.innerHTML = `⬇️ Período ${periodoNum}`;
+      actions.appendChild(periodoBtn);
+    }
+
+    // Período 3: botón del período + botón del plan completo (si hay periodo0)
+    if (isPeriodo3 && hasDocument) {
+      const p3btn = makeDownloadBtn(text);
+      p3btn.innerHTML = '⬇️ Período 3';
+      actions.appendChild(p3btn);
+    }
+
+    // Botón Plan Anual completo: cuando los 4 partes están listas
+    if (isPeriodo3 && planAnual.periodo0 && planAnual.periodo1 && planAnual.periodo2 && planAnual.periodo3) {
+      const fullContent = planAnual.getFullContent();
+      const fullBtn = makeDownloadBtn(fullContent, true);
+      actions.appendChild(fullBtn);
+    }
+
+    // Para otros documentos (no Plan Anual)
+    if (hasDocument && !isPeriodo0 && !isPeriodo1 && !isPeriodo2 && !isPeriodo3) {
+      actions.appendChild(makeDownloadBtn(text));
+    }
+
+    wrap.appendChild(actions);
+  }
+
+  row.appendChild(av);
+  row.appendChild(wrap);
+  messagesEl.insertBefore(row, typingRow);
+  scrollBottom();
+}
+
+function showTyping() { typingRow.classList.add('visible');    scrollBottom(); }
+function hideTyping() { typingRow.classList.remove('visible'); }
+
+function setStatus(online) {
+  statusBadge.className  = `status-badge ${online ? 'online' : 'offline'}`;
+  statusText.textContent = online ? 'En línea' : 'Sin conexión';
+  offlineBanner.classList.toggle('visible', !online);
+}
+
+// ── Fetch ───────────────────────────────────────────────────────
+
+function buildHistoryPayload() {
+  return history.slice(-HISTORY_LIMIT).map(t => {
+    const text = t.parts[0].text;
+    let truncated;
+    if (isDocumentText(text)) {
+      // Solo preservar la marca de período para que detectActiveFlow funcione.
+      // NO incluir texto adicional que el modelo pueda imitar.
+      const periodoMatch = text.match(/\[PERIODO_(\d)\]/);
+      const titleMatch   = text.match(/\[TITULO\]\s*([^\n]+)/);
+      const periodo = periodoMatch ? `[PERIODO_${periodoMatch[1]}]` : '';
+      const titulo  = titleMatch   ? titleMatch[1].trim()           : '';
+      // Formato limpio que el modelo reconoce como "ya generado" sin imitarlo
+      truncated = titulo ? `${periodo}[TITULO] ${titulo}` : `${periodo}[documento ya generado]`;
+    } else if (t.role === 'user') {
+      truncated = text.slice(0, 1200);
+    } else {
+      // Respuestas del bot: solo las preguntas del wizard, sin documentos
+      const clean = text.replace(/\[TITULO\].*$/s, '').trim();
+      truncated = clean.slice(0, 600);
+    }
+    return { role: t.role, parts: [{ text: truncated }] };
+  });
+}
+
+function isRetryable(err) {
+  return err.name === 'AbortError' || !!err.message?.startsWith('http_5');
+}
+
+async function fetchWithRetry(message, attempt = 0) {
+  const controller = new AbortController();
+  const timeout    = setTimeout(() => controller.abort(), CLIENT_TIMEOUT);
+  try {
+    const res = await fetch(WORKER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message, history: buildHistoryPayload(), pin: sessionPin }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeout);
+    if (res.status === 429) throw Object.assign(new Error('rate_limit'), { fatal: true });
+    if (res.status >= 400 && res.status < 500) throw Object.assign(new Error(`http_${res.status}`), { fatal: true });
+    if (!res.ok) throw new Error(`http_${res.status}`);
+    const data = await res.json();
+    if (data.error) throw Object.assign(new Error(data.error), { fatal: true });
+    if (!data.reply) throw new Error('empty_response');
+    return data.reply;
+  } catch (err) {
+    clearTimeout(timeout);
+    if (err.fatal) throw err;
+    if (!navigator.onLine) throw Object.assign(new Error('offline'), { fatal: true });
+    if (attempt < MAX_RETRY && isRetryable(err)) {
+      showToast(`Reintentando… (${attempt + 1}/${MAX_RETRY})`);
+      await new Promise(r => setTimeout(r, RETRY_BASE * Math.pow(2, attempt)));
+      return fetchWithRetry(message, attempt + 1);
+    }
+    throw err;
+  }
+}
+
+// Mensajes de carga según contexto
+function getLoadingMessage(text) {
+  const t = text.toLowerCase();
+  if (t.includes('plan anual'))    return 'Clara está armando el plan…';
+  if (t.includes('boletín') || t.includes('boletin') || t.includes('informe'))
+    return 'Clara está redactando los informes…';
+  if (t.includes('adaptación') || t.includes('adaptacion'))
+    return 'Clara está preparando la adaptación…';
+  if (t.includes('planificación') || t.includes('planificacion') || t.includes('clase'))
+    return 'Clara está armando la planificación…';
+  return null; // null = typing dots normales
+}
+
+async function sendMessage(text) {
+  if (!text.trim() || isLoading) return;
+  isLoading = true; sendBtn.disabled = true; setChipsDisabled(true);
+  appendMessage(text, 'user');
+  showTyping();
+  // Mensaje contextual después de 2.5s si tarda
+  const loadMsg = getLoadingMessage(text);
+  let loadTimer = null;
+  if (loadMsg) {
+    loadTimer = setTimeout(() => showToast(loadMsg, 15000), 2500);
+  }
+  const pendingTurn = { role: 'user', parts: [{ text }] };
+  try {
+    const reply = await fetchWithRetry(text);
+    hideTyping();
+    appendMessage(reply, 'bot');
+    history.push(pendingTurn);
+    history.push({ role: 'model', parts: [{ text: reply }] });
+    if (history.length > HISTORY_LIMIT * 2) history = history.slice(-HISTORY_LIMIT * 2);
+
+    // Reset Plan Anual si el usuario arranca algo nuevo
+    if (planAnual.active && planAnual.getPeriodosCompletos() === 3) {
+      // Plan completo — mantener barra visible pero no resetear
+    }
+  } catch (err) {
+    hideTyping();
+    const msgs = { rate_limit: 'Muchas consultas seguidas. Esperá un minuto antes de reintentar.', offline: 'Sin conexión a internet. Revisá tu red.' };
+    appendMessage(msgs[err.message] || (err.name==='AbortError' ? 'Tardó demasiado en responder. Intentá de nuevo.' : err.message.length < 120 ? err.message : 'Problema técnico. Intentá de nuevo en un momento.'), 'bot');
+  } finally {
+    if (loadTimer) clearTimeout(loadTimer);
+    isLoading = false;
+    sendBtn.disabled = inputEl.value.trim().length === 0;
+    setChipsDisabled(false);
+    inputEl.focus();
+  }
+}
+
+function sendSuggestion(text) {
+  if (isLoading) return;
+  if (suggestEl) suggestEl.style.display = 'none';
+  // Reset Plan Anual al empezar una nueva conversación
+  planAnual.reset();
+  inputEl.value = text; autoResize(); updateCharCount(); handleSend();
+}
+
+function handleSend() {
+  const text = inputEl.value.trim();
+  if (!text || isLoading) return;
+  inputEl.value = ''; autoResize(); updateCharCount();
+  sendMessage(text);
+}
+
+sendBtn.addEventListener('click', handleSend);
+inputEl.addEventListener('keydown', e => { if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } });
+inputEl.addEventListener('input', () => { autoResize(); updateCharCount(); });
+window.addEventListener('online',  () => setStatus(true));
+window.addEventListener('offline', () => setStatus(false));
+inputEl.addEventListener('focus', () => {
+  document.querySelector('meta[name=viewport]')
+    .setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no');
+});
+
+setStatus(navigator.onLine);
+
+// ── Nueva consulta ──────────────────────────────────────────────
+function resetChat() {
+  if (isLoading) return;
+  history = [];
+  planAnual.reset();
+  // Limpiar mensajes excepto el inicial
+  const rows = messagesEl.querySelectorAll('.msg-row');
+  rows.forEach((row, i) => { if (i > 0) row.remove(); });
+  // Mostrar chips nuevamente
+  if (suggestEl) suggestEl.style.display = 'flex';
+  inputEl.value = ''; autoResize(); updateCharCount();
+  showToast('Nueva consulta iniciada.');
+}
+
+// ── PIN de acceso ───────────────────────────────────────────────
+
+function submitPin() {
+  const pinInput = document.getElementById('pinInput');
+  const pinError = document.getElementById('pinError');
+  const pin = pinInput.value.trim().toUpperCase();
+
+  if (!pin || pin.length < 4) {
+    pinError.textContent = 'Ingresá un código válido.';
+    pinInput.focus();
+    return;
+  }
+
+  // Guardar PIN — el Worker lo valida en cada request
+  // Si es incorrecto, el primer mensaje del chat mostrará el error
+  sessionPin = pin;
+  document.getElementById('pinScreen').style.display = 'none';
+  document.getElementById('mainPage').style.display  = 'flex';
+  inputEl.focus();
+}
+
+// Enter en el campo PIN
+document.getElementById('pinInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') submitPin();
+});
+
+// Estilo focus en input PIN
+document.getElementById('pinInput').addEventListener('focus', function() {
+  this.style.borderColor = 'var(--orange)';
+});
+document.getElementById('pinInput').addEventListener('blur', function() {
+  this.style.borderColor = 'var(--border)';
+});
+
+// Si no hay MUNICIPIO_PINS en el Worker (modo demo), saltar pantalla PIN
+// Lo detectamos si el servidor devuelve 403 con "PIN inválido"
+// En ese caso mostramos el error en la pantalla principal
+</script>
+</body>
+</html>
