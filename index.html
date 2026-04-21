@@ -225,10 +225,10 @@
     </div>
 
     <div class="suggestions" id="suggestions">
-      <button class="chip" onclick="sendSuggestion('Necesito hacer un acta de reunión')">Acta de reunión 📄</button>
-      <button class="chip" onclick="sendSuggestion('Necesito hacer un comunicado')">Comunicado 📢</button>
-      <button class="chip" onclick="sendSuggestion('Necesito armar un proyecto institucional')">Proyecto institucional 🏫</button>
-      <button class="chip" onclick="sendSuggestion('Tengo una consulta de gestión')">Consulta de gestión 💬</button>
+      <button class="chip" onclick="setFlow('actas'); sendSuggestion('Necesito hacer un acta de reunión')">Acta de reunión 📄</button>
+      <button class="chip" onclick="setFlow('comunicados'); sendSuggestion('Necesito hacer un comunicado')">Comunicado 📢</button>
+      <button class="chip" onclick="setFlow('proyectos'); sendSuggestion('Necesito armar un proyecto institucional')">Proyecto institucional 🏫</button>
+      <button class="chip" onclick="setFlow('general'); sendSuggestion('Tengo una consulta de gestión')">Consulta de gestión 💬</button>
     </div>
 
     <div class="typing-row" id="typingRow">
@@ -264,740 +264,320 @@
 </div>
 
 <script>
-const WORKER_URL     = 'https://norma-aulaclara.abfacundotorres.workers.dev';
-const MAX_CHARS      = 2000;
-const MAX_RETRY      = 2;
-const RETRY_BASE     = 1200;
-const CLIENT_TIMEOUT = 33000;
-const HISTORY_LIMIT  = 16;
+// ── Config ──────────────────────────────────────────────────────
+const WORKER_URL    = 'https://norma-aulaclara.abfacundotorres.workers.dev';
+const MAX_CHARS     = 2000;
+const MAX_RETRY     = 2;
+const RETRY_BASE    = 1200;
+const CLIENT_TMOUT  = 33000;
+const HISTORY_LIMIT = 16;
 
-function isDocumentText(text) {
-  return text.includes('[TITULO]') || text.includes('[FIN_DOCUMENTO]') || text.includes('[PERIODO_');
+// ── State ───────────────────────────────────────────────────────
+let history    = [];
+let isLoading  = false;
+let toastTimer = null;
+let sessionPin = null;
+let activeFlow = 'general';
+let directivoCtx = { nombre: '', cargo: '' };
+
+// ── DOM refs ────────────────────────────────────────────────────
+const $   = id => document.getElementById(id);
+const msg = $('messages');
+const inp = $('userInput');
+const btn = $('sendBtn');
+const sug = $('suggestions');
+
+function isDoc(t) {
+  return t.includes('[TITULO]') || t.includes('[FIN_DOCUMENTO]');
 }
 
-const $ = id => document.getElementById(id);
-const messagesEl    = $('messages');
-const typingRow     = $('typingRow');
-const inputEl       = $('userInput');
-const sendBtn       = $('sendBtn');
-const suggestEl     = $('suggestions');
-const toastEl       = $('toast');
-const charCountEl   = $('charCount');
-const statusBadge   = $('statusBadge');
-const statusText    = $('statusText');
-const offlineBanner = $('offlineBanner');
-const planProgress  = $('planProgress');
-const planProgressLabel = $('planProgressLabel');
-
-let history   = [];
-let isLoading = false;
-let toastTimer;
-let sessionPin = null; // PIN del municipio
-
-// ── Estado Plan Anual ───────────────────────────────────────────
-// Acumula los 3 períodos hasta tener el plan completo
-const planAnual = {
-  active:   false,
-  periodo0: null, // intro: datos + fundamentación + propósitos
-  periodo1: null,
-  periodo2: null,
-  periodo3: null,
-  reset() {
-    this.active   = false;
-    this.periodo0 = null;
-    this.periodo1 = null;
-    this.periodo2 = null;
-    this.periodo3 = null;
-    planProgress.classList.remove('visible');
-  },
-  getPeriodosCompletos() {
-    // Contamos períodos 1-3 (no el 0 que es intro)
-    return [this.periodo1, this.periodo2, this.periodo3].filter(Boolean).length;
-  },
-  getFullContent() {
-    const p0 = this.periodo0 || '';
-    const p1 = this.periodo1 || '';
-    const p2 = this.periodo2 || '';
-    const p3 = this.periodo3 || '';
-
-    // Extraer título del período 0
-    const titleMatch = p0.match(/\[TITULO\]\s*(.+)/);
-    const titulo = titleMatch ? titleMatch[1].trim() : 'Plan Anual';
-
-    // Extraer cuerpo de cada parte (sin marcas de periodo/titulo/fin)
-    const extractBody = (text) => text
-      .replace(/\[PERIODO_\d\]\s*/g, '')
-      .replace(/\[TITULO\][^\n]*\n?/g, '')
-      .replace(/\[FIN_DOCUMENTO\]/g, '')
-      .trim();
-
-    const body0 = extractBody(p0);
-    const body1 = extractBody(p1);
-    const body2 = extractBody(p2);
-    const body3 = extractBody(p3);
-
-    return `[TITULO] ${titulo}\n${body0}\n${body1}\n${body2}\n${body3}\n[FIN_DOCUMENTO]`;
-  }
-};
-
-function updatePlanProgress(parte) {
-  // parte: 0=intro, 1=p1, 2=p2, 3=p3
-  planProgress.classList.add('visible');
-  const labels = ['Introducción lista','Período 1 listo','Período 2 listo','Plan Anual completo ✅'];
-  const steps = ['planStep1','planStep2','planStep3'];
-  // Mapear parte (0-3) a progreso visual (0-3)
-  steps.forEach((id, i) => {
-    const el = $(id);
-    if (i < parte)      { el.className = 'plan-step done'; }
-    else if (i === parte - 1 || (parte === 0 && i === 0)) { el.className = 'plan-step current'; }
-    else                 { el.className = 'plan-step'; }
-  });
-  if (parte === 0) {
-    $('planStep1').className = 'plan-step current';
-    $('planStep2').className = 'plan-step';
-    $('planStep3').className = 'plan-step';
-    planProgressLabel.textContent = 'Plan Anual — Introducción generada';
-  } else if (parte >= 3) {
-    $('planStep1').className = 'plan-step done';
-    $('planStep2').className = 'plan-step done';
-    $('planStep3').className = 'plan-step done';
-    planProgressLabel.textContent = '¡Plan Anual completo — listo para descargar! ✅';
-  } else {
-    planProgressLabel.textContent = `Plan Anual — Período ${parte} de 3 generado`;
-  }
+// Captura nombre/cargo del directivo
+function extractDirectivoCtx(text) {
+  const nameMatch = text.match(/(?:me llamo|mi nombre es)\s+([A-ZÁÉÍÓÚÜÑ][a-záéíóúüñ]{2,}(?:\s+[A-ZÁÉÍÓÚÜÑ][a-záéíóúüñ]{2,})?)/i);
+  if (nameMatch) directivoCtx.nombre = nameMatch[1].trim();
+  if (/directora?/i.test(text) && !directivoCtx.cargo) directivoCtx.cargo = 'Directora/Director';
+  if (/vicedirectora?/i.test(text) && !directivoCtx.cargo) directivoCtx.cargo = 'Vicedirector/a';
 }
 
-// ── Formato de texto ────────────────────────────────────────────
-
-function escapeHTML(str) {
-  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-            .replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+// ── Text rendering ──────────────────────────────────────────────
+function esc(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+          .replace(/"/g,'&quot;').replace(/'/g,'&#039;');
 }
-
-function applyInline(text) {
-  return text
-    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*([^*]+)\*/g,     '<em>$1</em>')
-    .replace(/_([^_]+)_/g,       '<em>$1</em>');
+function inline(s) {
+  return s.replace(/\*\*([^*]+)\*\*/g,'<strong>$1</strong>')
+          .replace(/\*([^*]+)\*/g,'<em>$1</em>')
+          .replace(/_([^_]+)_/g,'<em>$1</em>');
 }
-
-function formatText(raw) {
+function renderText(raw) {
   const cleaned = raw
-    .replace(/\[PERIODO_\d\]\s*/g, '')
-    .replace(/\[TITULO\]\s*/g,     '')
-    .replace(/\[SECCION\]\s*/g,    '### ')
-    .replace(/\[SUBSECCION\]\s*/g, '#### ')
-    .replace(/\[CAMPO\]\s*/g,      '')
-    .replace(/\[TEXTO\]\s*/g,      '')
-    .replace(/\[LISTA\]\s*/g,      '• ')
-    .replace(/\[SEPARADOR\]/g,     '\n---\n')
-    .replace(/\[FIN_DOCUMENTO\]/g, '');
-
-  const lines  = cleaned.split('\n');
-  const result = [];
-  let inUl = false, inOl = false, paraBuffer = [];
-
-  function flushPara() {
-    if (!paraBuffer.length) return;
-    result.push(`<p>${paraBuffer.join('<br>')}</p>`);
-    paraBuffer = [];
-  }
-
+    .replace(/\[TITULO\]\s*/g,'')
+    .replace(/\[SECCION\]\s*/g,'### ')
+    .replace(/\[SUBSECCION\]\s*/g,'#### ')
+    .replace(/\[CAMPO\]\s*/g,'')
+    .replace(/\[TEXTO\]\s*/g,'')
+    .replace(/\[LISTA\]\s*/g,'• ')
+    .replace(/\[SEPARADOR\]/g,'\n---\n')
+    .replace(/\[FIN_DOCUMENTO\]/g,'');
+  const lines=cleaned.split('\n'), out=[]; let ul=false,ol=false,buf=[];
+  const flush=()=>{if(buf.length){out.push(`<p>${buf.join('<br>')}</p>`);buf=[];}};
   for (const line of lines) {
-    const trimmed = line.trim();
-    const escaped = escapeHTML(trimmed);
-
-    if (trimmed === '---') {
-      flushPara();
-      if (inUl) { result.push('</ul>'); inUl = false; }
-      if (inOl) { result.push('</ol>'); inOl = false; }
-      result.push('<hr>');
-      continue;
-    }
-    if (trimmed.startsWith('### ')) {
-      flushPara();
-      if (inUl) { result.push('</ul>'); inUl = false; }
-      if (inOl) { result.push('</ol>'); inOl = false; }
-      result.push(`<p><strong style="color:var(--orange)">${applyInline(escapeHTML(trimmed.slice(4)))}</strong></p>`);
-      continue;
-    }
-    if (trimmed.startsWith('#### ')) {
-      flushPara();
-      result.push(`<p><strong style="color:var(--brown-mid)">${applyInline(escapeHTML(trimmed.slice(5)))}</strong></p>`);
-      continue;
-    }
-
-    const ulMatch = escaped.match(/^•\s+(.+)/);
-    const olMatch = escaped.match(/^\d+\.\s+(.+)/);
-
-    if (ulMatch) {
-      flushPara();
-      if (!inUl) { if (inOl) { result.push('</ol>'); inOl = false; } result.push('<ul>'); inUl = true; }
-      result.push(`<li>${applyInline(ulMatch[1])}</li>`);
-    } else if (olMatch) {
-      flushPara();
-      if (!inOl) { if (inUl) { result.push('</ul>'); inUl = false; } result.push('<ol>'); inOl = true; }
-      result.push(`<li>${applyInline(olMatch[1])}</li>`);
-    } else {
-      if (inUl) { result.push('</ul>'); inUl = false; }
-      if (inOl) { result.push('</ol>'); inOl = false; }
-      if (escaped === '') { flushPara(); }
-      else { paraBuffer.push(applyInline(escaped)); }
-    }
+    const t=line.trim(), e=esc(t);
+    if(t==='---'){flush();if(ul){out.push('</ul>');ul=false;}if(ol){out.push('</ol>');ol=false;}out.push('<hr>');continue;}
+    if(t.startsWith('### ')){flush();if(ul){out.push('</ul>');ul=false;}if(ol){out.push('</ol>');ol=false;}out.push(`<p><strong style="color:var(--orange)">${inline(esc(t.slice(4)))}</strong></p>`);continue;}
+    if(t.startsWith('#### ')){flush();out.push(`<p><strong style="color:var(--brown-mid)">${inline(esc(t.slice(5)))}</strong></p>`);continue;}
+    const ulm=e.match(/^•\s+(.+)/), olm=e.match(/^\d+\.\s+(.+)/);
+    if(ulm){flush();if(!ul){if(ol){out.push('</ol>');ol=false;}out.push('<ul>');ul=true;}out.push(`<li>${inline(ulm[1])}</li>`);}
+    else if(olm){flush();if(!ol){if(ul){out.push('</ul>');ul=false;}out.push('<ol>');ol=true;}out.push(`<li>${inline(olm[1])}</li>`);}
+    else{if(ul){out.push('</ul>');ul=false;}if(ol){out.push('</ol>');ol=false;}if(e==='')flush();else buf.push(inline(e));}
   }
-
-  flushPara();
-  if (inUl) result.push('</ul>');
-  if (inOl) result.push('</ol>');
-  return result.join('');
+  flush();if(ul)out.push('</ul>');if(ol)out.push('</ol>');
+  return out.join('');
 }
 
-// ── Generación Word ─────────────────────────────────────────────
-
-function parseDocumentContent(raw) {
-  // Normalizar: unir líneas donde la marca está sola y el contenido viene en la siguiente
-  // Ej: "[LISTA]\nContenido" → "[LISTA] Contenido"
-  const normalized = raw
-    .replace(/\[PERIODO_\d\]\s*/g, '')
-    .replace(/^(\s*)[-•]\s+/gm, '$1[LISTA] ');  // Solo líneas que arrancan con bullet
-
-  const lines = normalized.split('\n');
-  const documents = [];
-  let currentDoc = null, currentSection = null, currentSubsection = null;
-  let lastTag = null; // para capturar contenido huérfano
-
-  for (const line of lines) {
-    const t = line.trim();
-    if (!t) continue;
-
-    if (t === '[FIN_DOCUMENTO]') {
-      if (currentDoc) documents.push(currentDoc);
-      currentDoc = null; currentSection = null; currentSubsection = null; lastTag = null;
-    } else if (t === '[SEPARADOR]') {
-      if (currentDoc) documents.push(currentDoc);
-      currentDoc = null; currentSection = null; currentSubsection = null; lastTag = null;
-    } else if (t.startsWith('[TITULO]')) {
-      const titulo = t.replace('[TITULO]','').trim();
-      if (titulo) currentDoc = { titulo, sections: [] };
-      currentSection = null; currentSubsection = null;
-    } else if (t.startsWith('[SECCION]') && currentDoc) {
-      currentSubsection = null;
-      const title = t.replace('[SECCION]','').trim();
-      if (title) { currentSection = { title, items: [] }; currentDoc.sections.push(currentSection); }
-    } else if (t.startsWith('[SUBSECCION]') && currentSection) {
-      const title = t.replace('[SUBSECCION]','').trim();
-      if (title) {
-        currentSubsection = { title, items: [] };
-        currentSection.items.push({ type: 'subsection', data: currentSubsection });
-      }
-    } else if (t.startsWith('[CAMPO]')) {
-      const text = t.replace('[CAMPO]','').trim();
-      const target = currentSubsection || currentSection;
-      if (target && text) target.items.push({ type: 'field', text });
-      lastTag = text ? null : 'campo';
-    } else if (t.startsWith('[TEXTO]')) {
-      const text = t.replace('[TEXTO]','').trim();
-      const target = currentSubsection || currentSection;
-      if (target && text) target.items.push({ type: 'text', text });
-      lastTag = text ? null : 'texto';
-    } else if (t.startsWith('[LISTA]')) {
-      const text = t.replace('[LISTA]','').trim();
-      const target = currentSubsection || currentSection;
-      if (target && text) target.items.push({ type: 'bullet', text });
-      lastTag = text ? null : 'lista';
-    } else if (lastTag && currentDoc) {
-      // Contenido huérfano — pertenece a la última marca
-      const target = currentSubsection || currentSection;
-      if (target && t && !t.startsWith('[')) {
-        const typeMap = { lista: 'bullet', texto: 'text', campo: 'field' };
-        target.items.push({ type: typeMap[lastTag] || 'text', text: t });
-      }
-      lastTag = null;
-    }
+// ── Word generation ─────────────────────────────────────────────
+function parseDoc(raw) {
+  const norm=raw.replace(/^(\s*)[-•]\s+/gm,'$1[LISTA] ');
+  const docs=[]; let doc=null,sec=null,sub=null,last=null;
+  for (const line of norm.split('\n')) {
+    const t=line.trim(); if(!t)continue;
+    if(t==='[FIN_DOCUMENTO]'||t==='[SEPARADOR]'){if(doc)docs.push(doc);doc=sec=sub=last=null;}
+    else if(t.startsWith('[TITULO]')){const ti=t.replace('[TITULO]','').trim();if(ti){doc={titulo:ti,sections:[]};sec=sub=null;}}
+    else if(t.startsWith('[SECCION]')&&doc){sub=null;const ti=t.replace('[SECCION]','').trim();if(ti){sec={title:ti,items:[]};doc.sections.push(sec);}}
+    else if(t.startsWith('[SUBSECCION]')&&sec){const ti=t.replace('[SUBSECCION]','').trim();if(ti){sub={title:ti,items:[]};sec.items.push({type:'subsection',data:sub});}}
+    else if(t.startsWith('[CAMPO]')){const tx=t.replace('[CAMPO]','').trim();const tgt=sub||sec;if(tgt&&tx)tgt.items.push({type:'field',text:tx});last=tx?null:'campo';}
+    else if(t.startsWith('[TEXTO]')){const tx=t.replace('[TEXTO]','').trim();const tgt=sub||sec;if(tgt&&tx)tgt.items.push({type:'text',text:tx});last=tx?null:'texto';}
+    else if(t.startsWith('[LISTA]')){const tx=t.replace('[LISTA]','').trim();const tgt=sub||sec;if(tgt&&tx)tgt.items.push({type:'bullet',text:tx});last=tx?null:'lista';}
+    else if(last&&doc){const tgt=sub||sec;if(tgt&&t&&!t.startsWith('[')){tgt.items.push({type:{lista:'bullet',texto:'text',campo:'field'}[last]||'text',text:t});}last=null;}
   }
-  if (currentDoc) documents.push(currentDoc);
-  return documents;
+  if(doc)docs.push(doc); return docs;
 }
 
 function makeFilename(raw) {
-  const titleMatch = raw.match(/\[TITULO\]\s*(.+)/);
-  const base = titleMatch ? titleMatch[1].trim() : 'aulaclara';
-  return base
-    .toLowerCase()
+  const m=raw.match(/\[TITULO\]\s*(.+)/);
+  return((m?m[1].trim():'norma').toLowerCase()
     .replace(/[áä]/g,'a').replace(/[éë]/g,'e').replace(/[íï]/g,'i')
     .replace(/[óö]/g,'o').replace(/[úü]/g,'u').replace(/ñ/g,'n')
-    .replace(/[^\w\s\-]/g,'').replace(/\s+/g,'_').slice(0,60) + '.docx';
+    .replace(/[^\w\s-]/g,'').replace(/\s+/g,'_').slice(0,60))+'.docx';
 }
 
-async function generateWordDocument(rawContent) {
-  if (window._docxError) throw new Error('La librería Word no pudo cargar. Recargá la página.');
-  if (!window._docxReady || typeof window.docx === 'undefined') {
-    throw new Error('La librería Word todavía está cargando. Esperá unos segundos.');
-  }
-
-  const { Document, Packer, Paragraph, TextRun, HeadingLevel,
-          AlignmentType, LevelFormat, BorderStyle, PageBreak } = window.docx;
-
-  // Limpiar marcas [PERIODO_X] antes de parsear
-  const cleanRaw = rawContent.replace(/\[PERIODO_\d\]\s*/g, '');
-  const documents = parseDocumentContent(cleanRaw);
-  if (!documents.length) throw new Error('No se encontró contenido para generar.');
-
-  const allChildren = [];
-  const numbering = {
-    config: [{ reference: 'bullets', levels: [{
-      level: 0, format: LevelFormat.BULLET, text: '•', alignment: AlignmentType.LEFT,
-      style: { paragraph: { indent: { left: 720, hanging: 360 } } }
-    }] }],
+async function generateWord(rawContent) {
+  if(window._docxError) throw new Error('Librería Word no disponible. Recargá la página.');
+  if(!window._docxReady) throw new Error('Librería Word cargando. Esperá unos segundos.');
+  const {Document,Packer,Paragraph,TextRun,HeadingLevel,AlignmentType,LevelFormat,BorderStyle,PageBreak}=window.docx;
+  const docs=parseDoc(rawContent);
+  if(!docs.length) throw new Error('Sin contenido para generar.');
+  const numbering={config:[{reference:'bullets',levels:[{level:0,format:LevelFormat.BULLET,text:'•',alignment:AlignmentType.LEFT,style:{paragraph:{indent:{left:720,hanging:360}}}}]}]};
+  const children=[];
+  const pushItem=(item)=>{
+    if(item.type==='subsection'){
+      children.push(new Paragraph({heading:HeadingLevel.HEADING_3,children:[new TextRun({text:item.data.title,bold:true,size:23,font:'Arial',color:'2B5BA8'})],spacing:{before:180,after:80}}));
+      item.data.items.forEach(pushItem);
+    } else if(item.type==='field'){
+      const p=item.text.split(':');
+      children.push(new Paragraph({children:[new TextRun({text:(p[0]||'')+': ',bold:true,size:22,font:'Arial'}),new TextRun({text:p.slice(1).join(':').trim(),size:22,font:'Arial'})],spacing:{after:80}}));
+    } else if(item.type==='text'){
+      children.push(new Paragraph({children:[new TextRun({text:item.text,size:22,font:'Arial'})],spacing:{after:120}}));
+    } else if(item.type==='bullet'){
+      children.push(new Paragraph({numbering:{reference:'bullets',level:0},children:[new TextRun({text:item.text,size:22,font:'Arial'})],spacing:{after:80}}));
+    }
   };
-
-  documents.forEach((docData, idx) => {
-    if (idx > 0) allChildren.push(new Paragraph({ children: [new PageBreak()] }));
-
-    allChildren.push(new Paragraph({
-      heading: HeadingLevel.HEADING_1,
-      children: [new TextRun({ text: docData.titulo, bold: true, size: 34, font: 'Arial' })],
-      spacing: { after: 200 },
-    }));
-    allChildren.push(new Paragraph({
-      border: { bottom: { style: BorderStyle.SINGLE, size: 8, color: 'D95F1A', space: 1 } },
-      spacing: { after: 160 }, children: [],
-    }));
-    allChildren.push(new Paragraph({
-      children: [new TextRun({
-        text: `Generado por Aula Clara · ${new Date().toLocaleDateString('es-AR')}`,
-        size: 18, color: 'C47A3A', font: 'Arial', italics: true,
-      })],
-      spacing: { after: 320 },
-    }));
-
-    for (const section of docData.sections) {
-      allChildren.push(new Paragraph({
-        heading: HeadingLevel.HEADING_2,
-        children: [new TextRun({ text: section.title, bold: true, size: 26, font: 'Arial', color: 'D95F1A' })],
-        spacing: { before: 320, after: 100 },
-      }));
-      for (const item of section.items) pushItemToDoc(allChildren, item, numbering);
-    }
-
-    // Líneas observaciones
-    allChildren.push(new Paragraph({ spacing: { before: 480 }, children: [] }));
-    allChildren.push(new Paragraph({
-      border: { top: { style: BorderStyle.SINGLE, size: 4, color: 'EDD5B0', space: 1 } },
-      spacing: { after: 100 }, children: [],
-    }));
-    allChildren.push(new Paragraph({
-      children: [new TextRun({ text: 'Observaciones:', size: 20, bold: true, font: 'Arial', color: 'C47A3A' })],
-      spacing: { after: 160 },
-    }));
-    for (let i = 0; i < 3; i++) {
-      allChildren.push(new Paragraph({
-        border: { bottom: { style: BorderStyle.SINGLE, size: 2, color: 'EDD5B0', space: 1 } },
-        spacing: { after: 240 },
-        children: [new TextRun({ text: ' ', size: 22 })],
-      }));
-    }
+  docs.forEach((d,i)=>{
+    if(i>0)children.push(new Paragraph({children:[new PageBreak()]}));
+    children.push(new Paragraph({heading:HeadingLevel.HEADING_1,children:[new TextRun({text:d.titulo,bold:true,size:34,font:'Arial'})],spacing:{after:200}}));
+    children.push(new Paragraph({border:{bottom:{style:BorderStyle.SINGLE,size:8,color:'2B5BA8',space:1}},spacing:{after:160},children:[]}));
+    children.push(new Paragraph({children:[new TextRun({text:`Generado por Norma · Aula Clara · ${new Date().toLocaleDateString('es-AR')}`,size:18,color:'5B8DD9',font:'Arial',italics:true})],spacing:{after:320}}));
+    d.sections.forEach(sec=>{
+      children.push(new Paragraph({heading:HeadingLevel.HEADING_2,children:[new TextRun({text:sec.title,bold:true,size:26,font:'Arial',color:'2B5BA8'})],spacing:{before:320,after:100}}));
+      sec.items.forEach(pushItem);
+    });
+    children.push(new Paragraph({spacing:{before:480},children:[]}));
+    children.push(new Paragraph({border:{top:{style:BorderStyle.SINGLE,size:4,color:'C5D5EF',space:1}},spacing:{after:100},children:[]}));
+    children.push(new Paragraph({children:[new TextRun({text:'Observaciones:',size:20,bold:true,font:'Arial',color:'5B8DD9'})],spacing:{after:160}}));
+    for(let i=0;i<3;i++) children.push(new Paragraph({border:{bottom:{style:BorderStyle.SINGLE,size:2,color:'C5D5EF',space:1}},spacing:{after:240},children:[new TextRun({text:' ',size:22})]}));
   });
-
-  const doc = new Document({
+  const doc=new Document({
     numbering,
-    styles: {
-      default: { document: { run: { font: 'Arial', size: 22 } } },
-      paragraphStyles: [
-        { id: 'Heading1', name: 'Heading 1', basedOn: 'Normal', next: 'Normal', quickFormat: true,
-          run: { size: 34, bold: true, font: 'Arial', color: '3D1F0A' },
-          paragraph: { spacing: { before: 0, after: 200 }, outlineLevel: 0 } },
-        { id: 'Heading2', name: 'Heading 2', basedOn: 'Normal', next: 'Normal', quickFormat: true,
-          run: { size: 26, bold: true, font: 'Arial', color: 'D95F1A' },
-          paragraph: { spacing: { before: 320, after: 100 }, outlineLevel: 1 } },
-        { id: 'Heading3', name: 'Heading 3', basedOn: 'Normal', next: 'Normal', quickFormat: true,
-          run: { size: 23, bold: true, font: 'Arial', color: '7A3B10' },
-          paragraph: { spacing: { before: 180, after: 80 }, outlineLevel: 2 } },
-      ],
+    styles:{
+      default:{document:{run:{font:'Arial',size:22}}},
+      paragraphStyles:[
+        {id:'Heading1',name:'Heading 1',basedOn:'Normal',next:'Normal',quickFormat:true,run:{size:34,bold:true,font:'Arial',color:'0F2044'},paragraph:{spacing:{before:0,after:200},outlineLevel:0}},
+        {id:'Heading2',name:'Heading 2',basedOn:'Normal',next:'Normal',quickFormat:true,run:{size:26,bold:true,font:'Arial',color:'2B5BA8'},paragraph:{spacing:{before:320,after:100},outlineLevel:1}},
+        {id:'Heading3',name:'Heading 3',basedOn:'Normal',next:'Normal',quickFormat:true,run:{size:23,bold:true,font:'Arial',color:'2B5BA8'},paragraph:{spacing:{before:180,after:80},outlineLevel:2}},
+      ]
     },
-    sections: [{
-      properties: { page: { size: { width: 11906, height: 16838 }, margin: { top: 1440, right: 1440, bottom: 1440, left: 1440 } } },
-      children: allChildren,
-    }],
+    sections:[{properties:{page:{size:{width:11906,height:16838},margin:{top:1440,right:1440,bottom:1440,left:1440}}},children}]
   });
-
-  const blob = await Packer.toBlob(doc);
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href = url; a.download = makeFilename(rawContent); a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 3000);
+  const blob=await Packer.toBlob(doc);
+  const url=URL.createObjectURL(blob);
+  const a=Object.assign(document.createElement('a'),{href:url,download:makeFilename(rawContent)});
+  a.click(); setTimeout(()=>URL.revokeObjectURL(url),3000);
 }
 
-function pushItemToDoc(children, item, numbering) {
-  const { Paragraph, TextRun, HeadingLevel } = window.docx;
-  if (item.type === 'subsection') {
-    children.push(new Paragraph({
-      heading: HeadingLevel.HEADING_3,
-      children: [new TextRun({ text: item.data.title, bold: true, size: 23, font: 'Arial', color: '7A3B10' })],
-      spacing: { before: 180, after: 80 },
-    }));
-    for (const sub of item.data.items) pushItemToDoc(children, sub, numbering);
-    return;
-  }
-  if (item.type === 'field') {
-    const parts = item.text.split(':');
-    children.push(new Paragraph({
-      children: [
-        new TextRun({ text: (parts[0]||'') + ': ', bold: true, size: 22, font: 'Arial' }),
-        new TextRun({ text: parts.slice(1).join(':').trim(), size: 22, font: 'Arial' }),
-      ],
-      spacing: { after: 80 },
-    }));
-  } else if (item.type === 'text') {
-    children.push(new Paragraph({
-      children: [new TextRun({ text: item.text, size: 22, font: 'Arial' })],
-      spacing: { after: 120 },
-    }));
-  } else if (item.type === 'bullet') {
-    children.push(new Paragraph({
-      numbering: { reference: 'bullets', level: 0 },
-      children: [new TextRun({ text: item.text, size: 22, font: 'Arial' })],
-      spacing: { after: 80 },
-    }));
-  }
-}
-
-// ── UI helpers ──────────────────────────────────────────────────
-
-function scrollBottom() { requestAnimationFrame(() => { messagesEl.scrollTop = messagesEl.scrollHeight; }); }
-
-function showToast(msg, duration = 3500) {
-  clearTimeout(toastTimer);
-  toastEl.textContent = msg; toastEl.classList.add('show');
-  toastTimer = setTimeout(() => toastEl.classList.remove('show'), duration);
-}
-
-function autoResize() {
-  inputEl.style.height = 'auto';
-  inputEl.style.height = Math.min(inputEl.scrollHeight, 110) + 'px';
-}
-
-function updateCharCount() {
-  const len = inputEl.value.length, left = MAX_CHARS - len;
-  charCountEl.textContent = left > 300 ? '' : `${left} caracteres restantes`;
-  charCountEl.className = `char-count${left <= 300 ? (left < 50 ? ' limit' : ' warn') : ''}`;
-  sendBtn.disabled = len === 0 || isLoading;
-}
-
-function setChipsDisabled(disabled) {
-  suggestEl?.querySelectorAll('.chip').forEach(c => { c.disabled = disabled; });
-}
-
-function makeDownloadBtn(rawContent, isFullPlan = false) {
-  const btn = document.createElement('button');
-  btn.className = `action-btn ${isFullPlan ? 'download-full' : 'download'}`;
-  btn.innerHTML = isFullPlan ? '⬇️ Descargar Plan Anual completo' : '⬇️ Descargar Word';
-  btn.onclick = async () => {
-    if (window._docxError) { showToast('Librería Word no disponible. Recargá la página.'); return; }
-    btn.innerHTML = '⏳ Generando...'; btn.disabled = true;
-    try {
-      await generateWordDocument(rawContent);
-      btn.innerHTML = isFullPlan ? '✅ Plan Anual descargado' : '✅ Descargado';
-      setTimeout(() => { btn.innerHTML = isFullPlan ? '⬇️ Descargar Plan Anual completo' : '⬇️ Descargar Word'; btn.disabled = false; }, 3000);
-    } catch (err) {
-      btn.innerHTML = '❌ Error'; btn.disabled = false;
-      showToast(err.message || 'Error al generar el documento.');
-    }
+// ── Download button ─────────────────────────────────────────────
+function makeDownloadBtn(content,label='⬇️ Descargar Word',cls='download') {
+  const b=document.createElement('button');
+  b.className=`action-btn ${cls}`; b.innerHTML=label;
+  b.onclick=async()=>{
+    if(window._docxError){showToast('Librería Word no disponible.');return;}
+    b.innerHTML='⏳ Generando...'; b.disabled=true;
+    try{await generateWord(content);b.innerHTML='✅ Descargado';setTimeout(()=>{b.innerHTML=label;b.disabled=false;},3000);}
+    catch(e){b.innerHTML='❌ Error';b.disabled=false;showToast(e.message||'Error al generar.');}
   };
-  return btn;
+  return b;
 }
 
+// ── appendMessage ───────────────────────────────────────────────
 function appendMessage(text, role) {
-  const isPeriodo1 = text.includes('[PERIODO_1]');
-  const isPeriodo2 = text.includes('[PERIODO_2]');
-  const isPeriodo3 = text.includes('[PERIODO_3]');
-  const hasDocument = text.includes('[FIN_DOCUMENTO]');
-
-  // Detectar y acumular períodos del Plan Anual
-  const isPeriodo0 = text.includes('[PERIODO_0]');
-  if (isPeriodo0) { planAnual.active = true; planAnual.periodo0 = text; updatePlanProgress(0); }
-  if (isPeriodo1) { planAnual.periodo1 = text; updatePlanProgress(1); }
-  if (isPeriodo2) { planAnual.periodo2 = text; updatePlanProgress(2); }
-  if (isPeriodo3) { planAnual.periodo3 = text; updatePlanProgress(3); }
-
-  const row = document.createElement('div');
-  row.classList.add('msg-row', role);
-
-  const av = document.createElement('div');
-  av.className = 'msg-avatar';
-  av.setAttribute('aria-hidden', 'true');
-
-  if (role === 'bot') {
-    const img = document.createElement('img');
-    img.src = 'https://i.imgur.com/PTiJ7tK.jpeg'; img.alt = '';
-    img.onerror = () => { img.style.display='none'; av.textContent='👩‍🏫'; };
-    av.appendChild(img);
+  const row=document.createElement('div'); row.className=`msg-row ${role}`;
+  const av=document.createElement('div'); av.className='msg-avatar';
+  if(role==='bot'){
+    av.innerHTML=`<img src="https://i.imgur.com/PTiJ7tK.jpeg" alt="" onerror="this.style.display=\'none\';this.parentNode.textContent=\'🗂️\';">`;
   } else {
-    av.innerHTML = '<svg style="width:20px;height:20px;fill:#C47A3A" viewBox="0 0 16 16"><path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm2-3a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm4 8c0 1-1 1-1 1H3s-1 0-1-1 1-4 6-4 6 3 6 4zm-1-.004c-.001-.246-.154-.986-.832-1.664C11.516 10.68 10.289 10 8 10c-2.29 0-3.516.68-4.168 1.332-.678.678-.83 1.418-.832 1.664h10z"/></svg>';
+    av.innerHTML=`<svg style="width:20px;height:20px;fill:#5B8DD9" viewBox="0 0 16 16"><path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm4 8c0 1-1 1-1 1H3s-1 0-1-1 1-4 6-4 6 3 6 4z"/></svg>`;
   }
-
-  const wrap = document.createElement('div');
-  wrap.className = 'bubble-wrap';
-
-  const bubble = document.createElement('div');
-  bubble.className = 'bubble';
-  bubble.innerHTML = formatText(text);
-  wrap.appendChild(bubble);
-
-  if (role === 'bot') {
-    const actions = document.createElement('div');
-    actions.className = 'bubble-actions';
-
-    // Botón copiar siempre
-    const copyBtn = document.createElement('button');
-    copyBtn.className = 'action-btn';
-    copyBtn.innerHTML = '📋 Copiar';
-    copyBtn.onclick = () => {
-      const plain = text.replace(/\[.*?\]/g,'').trim();
+  const wrap=document.createElement('div'); wrap.className='bubble-wrap';
+  const bubble=document.createElement('div'); bubble.className='bubble';
+  bubble.innerHTML=renderText(text); wrap.appendChild(bubble);
+  if(role==='bot'){
+    const acts=document.createElement('div'); acts.className='bubble-actions';
+    // Copy
+    const cp=document.createElement('button'); cp.className='action-btn'; cp.innerHTML='📋 Copiar';
+    cp.onclick=()=>{
+      const plain=text.replace(/\[TITULO\]\s*/g,'').replace(/\[SECCION\]\s*/g,'')
+        .replace(/\[SUBSECCION\]\s*/g,'').replace(/\[CAMPO\]\s*/g,'')
+        .replace(/\[TEXTO\]\s*/g,'').replace(/\[LISTA\]\s*/g,'• ')
+        .replace(/\[FIN_DOCUMENTO\]/g,'').replace(/\[SEPARADOR\]/g,'\n---\n').trim();
       navigator.clipboard.writeText(plain)
-        .then(()  => { copyBtn.innerHTML='✅ Copiado'; setTimeout(()=>{copyBtn.innerHTML='📋 Copiar';},2000); })
-        .catch(()  => showToast('No se pudo copiar'));
+        .then(()=>{cp.innerHTML='✅ Copiado';setTimeout(()=>{cp.innerHTML='📋 Copiar';},2000);})
+        .catch(()=>showToast('No se pudo copiar'));
     };
-    actions.appendChild(copyBtn);
-
-    // Para períodos del Plan Anual
-    const isPeriodo0 = text.includes('[PERIODO_0]');
-
-    // Período 0 (intro): sin botón de descarga individual, es solo el marco
-    // Períodos 1 y 2: botón para descargar ese período
-    if ((isPeriodo1 || isPeriodo2) && hasDocument) {
-      const periodoNum = isPeriodo1 ? 1 : 2;
-      const periodoBtn = makeDownloadBtn(text);
-      periodoBtn.innerHTML = `⬇️ Período ${periodoNum}`;
-      actions.appendChild(periodoBtn);
-    }
-
-    // Período 3: botón del período + botón del plan completo (si hay periodo0)
-    if (isPeriodo3 && hasDocument) {
-      const p3btn = makeDownloadBtn(text);
-      p3btn.innerHTML = '⬇️ Período 3';
-      actions.appendChild(p3btn);
-    }
-
-    // Botón Plan Anual completo: cuando los 4 partes están listas
-    if (isPeriodo3 && planAnual.periodo0 && planAnual.periodo1 && planAnual.periodo2 && planAnual.periodo3) {
-      const fullContent = planAnual.getFullContent();
-      const fullBtn = makeDownloadBtn(fullContent, true);
-      actions.appendChild(fullBtn);
-    }
-
-    // Para otros documentos (no Plan Anual)
-    if (hasDocument && !isPeriodo0 && !isPeriodo1 && !isPeriodo2 && !isPeriodo3) {
-      actions.appendChild(makeDownloadBtn(text));
-    }
-
-    wrap.appendChild(actions);
+    acts.appendChild(cp);
+    if(text.includes('[FIN_DOCUMENTO]')) acts.appendChild(makeDownloadBtn(text));
+    wrap.appendChild(acts);
   }
-
-  row.appendChild(av);
-  row.appendChild(wrap);
-  messagesEl.insertBefore(row, typingRow);
-  scrollBottom();
+  row.appendChild(av); row.appendChild(wrap);
+  msg.insertBefore(row,$('typingRow'));
+  requestAnimationFrame(()=>{msg.scrollTop=msg.scrollHeight;});
 }
 
-function showTyping() { typingRow.classList.add('visible');    scrollBottom(); }
-function hideTyping() { typingRow.classList.remove('visible'); }
-
-function setStatus(online) {
-  statusBadge.className  = `status-badge ${online ? 'online' : 'offline'}`;
-  statusText.textContent = online ? 'En línea' : 'Sin conexión';
-  offlineBanner.classList.toggle('visible', !online);
+// ── History payload ─────────────────────────────────────────────
+function historyPayload() {
+  return history.slice(-HISTORY_LIMIT).map(t=>{
+    const text=t.parts[0].text; let truncated;
+    if(isDoc(text)){
+      const tm=text.match(/\[TITULO\]\s*([^\n]+)/);
+      truncated=`[TITULO] ${tm?tm[1].trim():'documento'}`;
+    } else {
+      truncated=t.role==='user'?text.slice(0,1000):text.replace(/\[TITULO\][\s\S]*$/,'').trim().slice(0,800);
+    }
+    return {role:t.role,parts:[{text:truncated}]};
+  });
 }
 
 // ── Fetch ───────────────────────────────────────────────────────
-
-function buildHistoryPayload() {
-  return history.slice(-HISTORY_LIMIT).map(t => {
-    const text = t.parts[0].text;
-    let truncated;
-    if (isDocumentText(text)) {
-      // Solo preservar la marca de período para que detectActiveFlow funcione.
-      // NO incluir texto adicional que el modelo pueda imitar.
-      const periodoMatch = text.match(/\[PERIODO_(\d)\]/);
-      const titleMatch   = text.match(/\[TITULO\]\s*([^\n]+)/);
-      const periodo = periodoMatch ? `[PERIODO_${periodoMatch[1]}]` : '';
-      const titulo  = titleMatch   ? titleMatch[1].trim()           : '';
-      // Formato limpio que el modelo reconoce como "ya generado" sin imitarlo
-      truncated = titulo ? `${periodo}[TITULO] ${titulo}` : `${periodo}[documento ya generado]`;
-    } else if (t.role === 'user') {
-      truncated = text.slice(0, 1200);
-    } else {
-      // Respuestas del bot: solo las preguntas del wizard, sin documentos
-      const clean = text.replace(/\[TITULO\].*$/s, '').trim();
-      truncated = clean.slice(0, 600);
-    }
-    return { role: t.role, parts: [{ text: truncated }] };
-  });
-}
-
-function isRetryable(err) {
-  return err.name === 'AbortError' || !!err.message?.startsWith('http_5');
-}
-
-async function fetchWithRetry(message, attempt = 0) {
-  const controller = new AbortController();
-  const timeout    = setTimeout(() => controller.abort(), CLIENT_TIMEOUT);
+async function fetchMsg(message, attempt=0) {
+  const ctrl=new AbortController(), tmout=setTimeout(()=>ctrl.abort(),CLIENT_TMOUT);
   try {
-    const res = await fetch(WORKER_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message, history: buildHistoryPayload(), pin: sessionPin }),
-      signal: controller.signal,
+    const res=await fetch(WORKER_URL,{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({message,history:historyPayload(),pin:sessionPin,flow:activeFlow,ctx:directivoCtx}),
+      signal:ctrl.signal,
     });
-    clearTimeout(timeout);
-    if (res.status === 429) throw Object.assign(new Error('rate_limit'), { fatal: true });
-    if (res.status >= 400 && res.status < 500) throw Object.assign(new Error(`http_${res.status}`), { fatal: true });
-    if (!res.ok) throw new Error(`http_${res.status}`);
-    const data = await res.json();
-    if (data.error) throw Object.assign(new Error(data.error), { fatal: true });
-    if (!data.reply) throw new Error('empty_response');
+    clearTimeout(tmout);
+    if(res.status===429) throw Object.assign(new Error('rate_limit'),{fatal:true});
+    if(res.status>=400&&res.status<500) throw Object.assign(new Error(`http_${res.status}`),{fatal:true});
+    if(!res.ok) throw new Error(`http_${res.status}`);
+    const data=await res.json();
+    if(data.error) throw Object.assign(new Error(data.error),{fatal:true});
+    if(!data.reply) throw new Error('empty');
+    if(data.flow) activeFlow=data.flow;
     return data.reply;
-  } catch (err) {
-    clearTimeout(timeout);
-    if (err.fatal) throw err;
-    if (!navigator.onLine) throw Object.assign(new Error('offline'), { fatal: true });
-    if (attempt < MAX_RETRY && isRetryable(err)) {
-      showToast(`Reintentando… (${attempt + 1}/${MAX_RETRY})`);
-      await new Promise(r => setTimeout(r, RETRY_BASE * Math.pow(2, attempt)));
-      return fetchWithRetry(message, attempt + 1);
+  } catch(err) {
+    clearTimeout(tmout);
+    if(err.fatal) throw err;
+    if(!navigator.onLine) throw Object.assign(new Error('offline'),{fatal:true});
+    if(attempt<MAX_RETRY&&(err.name==='AbortError'||err.message?.startsWith('http_5'))){
+      showToast(`Reintentando… (${attempt+1}/${MAX_RETRY})`);
+      await new Promise(r=>setTimeout(r,RETRY_BASE*Math.pow(2,attempt)));
+      return fetchMsg(message,attempt+1);
     }
     throw err;
   }
 }
 
-// Mensajes de carga según contexto
-function getLoadingMessage(text) {
-  const t = text.toLowerCase();
-  if (t.includes('plan anual'))    return 'Clara está armando el plan…';
-  if (t.includes('boletín') || t.includes('boletin') || t.includes('informe'))
-    return 'Clara está redactando los informes…';
-  if (t.includes('adaptación') || t.includes('adaptacion'))
-    return 'Clara está preparando la adaptación…';
-  if (t.includes('planificación') || t.includes('planificacion') || t.includes('clase'))
-    return 'Clara está armando la planificación…';
-  return null; // null = typing dots normales
-}
-
+// ── sendMessage ─────────────────────────────────────────────────
 async function sendMessage(text) {
-  if (!text.trim() || isLoading) return;
-  isLoading = true; sendBtn.disabled = true; setChipsDisabled(true);
-  appendMessage(text, 'user');
-  showTyping();
-  // Mensaje contextual después de 2.5s si tarda
-  const loadMsg = getLoadingMessage(text);
-  let loadTimer = null;
-  if (loadMsg) {
-    loadTimer = setTimeout(() => showToast(loadMsg, 15000), 2500);
-  }
-  const pendingTurn = { role: 'user', parts: [{ text }] };
+  if(!text.trim()||isLoading) return;
+  isLoading=true; btn.disabled=true; setChips(true);
+  extractDirectivoCtx(text);
+  appendMessage(text,'user');
+  $('typingRow').classList.add('visible');
+  msg.scrollTop=msg.scrollHeight;
+  let loadTimer=null;
+  if(activeFlow==='actas') loadTimer=setTimeout(()=>showToast('Norma está armando el acta…',15000),2500);
+  else if(activeFlow==='proyectos') loadTimer=setTimeout(()=>showToast('Norma está armando el proyecto…',15000),2500);
+  else if(activeFlow==='comunicados') loadTimer=setTimeout(()=>showToast('Norma está redactando el comunicado…',15000),2500);
+  const pending={role:'user',parts:[{text}]};
   try {
-    const reply = await fetchWithRetry(text);
-    hideTyping();
-    appendMessage(reply, 'bot');
-    history.push(pendingTurn);
-    history.push({ role: 'model', parts: [{ text: reply }] });
-    if (history.length > HISTORY_LIMIT * 2) history = history.slice(-HISTORY_LIMIT * 2);
-
-    // Reset Plan Anual si el usuario arranca algo nuevo
-    if (planAnual.active && planAnual.getPeriodosCompletos() === 3) {
-      // Plan completo — mantener barra visible pero no resetear
-    }
-  } catch (err) {
-    hideTyping();
-    const msgs = { rate_limit: 'Muchas consultas seguidas. Esperá un minuto antes de reintentar.', offline: 'Sin conexión a internet. Revisá tu red.' };
-    appendMessage(msgs[err.message] || (err.name==='AbortError' ? 'Tardó demasiado en responder. Intentá de nuevo.' : err.message.length < 120 ? err.message : 'Problema técnico. Intentá de nuevo en un momento.'), 'bot');
+    const reply=await fetchMsg(text);
+    $('typingRow').classList.remove('visible');
+    appendMessage(reply,'bot');
+    history.push(pending); history.push({role:'model',parts:[{text:reply}]});
+    if(history.length>HISTORY_LIMIT*2) history=history.slice(-HISTORY_LIMIT*2);
+  } catch(err) {
+    $('typingRow').classList.remove('visible');
+    const msgs={rate_limit:'Demasiadas consultas. Esperá un minuto.',offline:'Sin conexión. Revisá tu red.'};
+    appendMessage(msgs[err.message]||(err.name==='AbortError'?'Tardó demasiado. Intentá de nuevo.':err.message?.length<120?err.message:'Problema técnico. Intentá de nuevo.'),'bot');
   } finally {
-    if (loadTimer) clearTimeout(loadTimer);
-    isLoading = false;
-    sendBtn.disabled = inputEl.value.trim().length === 0;
-    setChipsDisabled(false);
-    inputEl.focus();
+    if(loadTimer)clearTimeout(loadTimer);
+    isLoading=false; btn.disabled=inp.value.trim().length===0; setChips(false); inp.focus();
   }
 }
 
-function sendSuggestion(text) {
-  if (isLoading) return;
-  if (suggestEl) suggestEl.style.display = 'none';
-  // Reset Plan Anual al empezar una nueva conversación
-  planAnual.reset();
-  inputEl.value = text; autoResize(); updateCharCount(); handleSend();
+// ── UI ──────────────────────────────────────────────────────────
+function showToast(m,dur=3500){clearTimeout(toastTimer);const t=$('toast');t.textContent=m;t.classList.add('show');toastTimer=setTimeout(()=>t.classList.remove('show'),dur);}
+function setChips(d){sug?.querySelectorAll('.chip').forEach(c=>{c.disabled=d;});}
+function autoResize(){inp.style.height='auto';inp.style.height=Math.min(inp.scrollHeight,110)+'px';}
+function updateChar(){const left=MAX_CHARS-inp.value.length,el=$('charCount');el.textContent=left>300?'':`${left} caracteres restantes`;el.className='char-count'+(left<=300?left<50?' limit':' warn':'');btn.disabled=inp.value.trim().length===0||isLoading;}
+function setStatus(online){$('statusBadge').className=`status-badge ${online?'online':'offline'}`;$('statusText').textContent=online?'En línea':'Sin conexión';$('offlineBanner').classList.toggle('visible',!online);}
+function setFlow(f){activeFlow=f;}
+
+function sendSuggestion(text){
+  if(isLoading)return; if(sug)sug.style.display='none';
+  directivoCtx.cargo=''; // resetear cargo al cambiar flujo, nombre persiste
+  inp.value=text; autoResize(); updateChar(); handleSend();
 }
 
-function handleSend() {
-  const text = inputEl.value.trim();
-  if (!text || isLoading) return;
-  inputEl.value = ''; autoResize(); updateCharCount();
-  sendMessage(text);
-}
+function handleSend(){const text=inp.value.trim();if(!text||isLoading)return;inp.value='';autoResize();updateChar();sendMessage(text);}
 
-sendBtn.addEventListener('click', handleSend);
-inputEl.addEventListener('keydown', e => { if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } });
-inputEl.addEventListener('input', () => { autoResize(); updateCharCount(); });
-window.addEventListener('online',  () => setStatus(true));
-window.addEventListener('offline', () => setStatus(false));
-inputEl.addEventListener('focus', () => {
-  document.querySelector('meta[name=viewport]')
-    .setAttribute('content', 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no');
-});
-
-setStatus(navigator.onLine);
-
-// ── Nueva consulta ──────────────────────────────────────────────
-function resetChat() {
-  if (isLoading) return;
-  history = [];
-  planAnual.reset();
-  // Limpiar mensajes excepto el inicial
-  const rows = messagesEl.querySelectorAll('.msg-row');
-  rows.forEach((row, i) => { if (i > 0) row.remove(); });
-  // Mostrar chips nuevamente
-  if (suggestEl) suggestEl.style.display = 'flex';
-  inputEl.value = ''; autoResize(); updateCharCount();
+function resetChat(){
+  if(isLoading)return;
+  history=[]; activeFlow='general'; directivoCtx={nombre:'',cargo:''};
+  msg.querySelectorAll('.msg-row').forEach((r,i)=>{if(i>0)r.remove();});
+  if(sug)sug.style.display='flex';
+  inp.value=''; autoResize(); updateChar();
   showToast('Nueva consulta iniciada.');
 }
 
-// ── PIN de acceso ───────────────────────────────────────────────
-
-function submitPin() {
-  const pinInput = document.getElementById('pinInput');
-  const pinError = document.getElementById('pinError');
-  const pin = pinInput.value.trim().toUpperCase();
-
-  if (!pin || pin.length < 4) {
-    pinError.textContent = 'Ingresá un código válido.';
-    pinInput.focus();
-    return;
-  }
-
-  // Guardar PIN — el Worker lo valida en cada request
-  // Si es incorrecto, el primer mensaje del chat mostrará el error
-  sessionPin = pin;
-  document.getElementById('pinScreen').style.display = 'none';
-  document.getElementById('mainPage').style.display  = 'flex';
-  inputEl.focus();
+// ── PIN ─────────────────────────────────────────────────────────
+function submitPin(){
+  const pi=$('pinInput'),pe=$('pinError'),pin=pi.value.trim().toUpperCase();
+  if(!pin||pin.length<4){pe.textContent='Ingresá un código válido.';pi.focus();return;}
+  sessionPin=pin; $('pinScreen').style.display='none'; $('mainPage').style.display='flex'; inp.focus();
 }
+$('pinInput').addEventListener('keydown',e=>{if(e.key==='Enter')submitPin();});
+$('pinInput').addEventListener('focus',function(){this.style.borderColor='var(--orange)';});
+$('pinInput').addEventListener('blur',function(){this.style.borderColor='var(--border)';});
 
-// Enter en el campo PIN
-document.getElementById('pinInput').addEventListener('keydown', e => {
-  if (e.key === 'Enter') submitPin();
-});
-
-// Estilo focus en input PIN
-document.getElementById('pinInput').addEventListener('focus', function() {
-  this.style.borderColor = 'var(--orange)';
-});
-document.getElementById('pinInput').addEventListener('blur', function() {
-  this.style.borderColor = 'var(--border)';
-});
-
-// Si no hay MUNICIPIO_PINS en el Worker (modo demo), saltar pantalla PIN
-// Lo detectamos si el servidor devuelve 403 con "PIN inválido"
-// En ese caso mostramos el error en la pantalla principal
+// ── Events ───────────────────────────────────────────────────────
+btn.addEventListener('click',handleSend);
+inp.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();handleSend();}});
+inp.addEventListener('input',()=>{autoResize();updateChar();});
+inp.addEventListener('focus',()=>{document.querySelector('meta[name=viewport]').setAttribute('content','width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no');});
+window.addEventListener('online',()=>setStatus(true));
+window.addEventListener('offline',()=>setStatus(false));
+setStatus(navigator.onLine);
 </script>
 </body>
 </html>
