@@ -69,16 +69,6 @@
   .bubble ul li { list-style-type: disc; }
   .bubble ol li { list-style-type: decimal; }
   .bubble hr { border: none; border-top: 1px solid var(--border); margin: 10px 0; }
-
-  /* Barra de progreso Plan Anual */
-  .plan-progress { display: none; background: var(--warm-white); border: 1px solid var(--border); border-radius: 14px; padding: 10px 16px; margin-bottom: 8px; flex-shrink: 0; }
-  .plan-progress.visible { display: block; }
-  .plan-progress-label { font-size: 11px; color: var(--brown-mid); margin-bottom: 6px; font-weight: 500; }
-  .plan-progress-steps { display: flex; gap: 8px; }
-  .plan-step { flex: 1; height: 6px; border-radius: 3px; background: var(--border); transition: background 0.3s; }
-  .plan-step.done    { background: var(--green); }
-  .plan-step.current { background: var(--orange); }
-
   .bubble-actions { display: flex; gap: 6px; padding: 0 4px; flex-wrap: wrap; }
   .action-btn { display: flex; align-items: center; gap: 4px; font-size: 11px; padding: 4px 10px; background: transparent; border: 1px solid var(--border); border-radius: 12px; cursor: pointer; color: var(--brown-light); transition: background 0.15s, color 0.15s; font-family: 'DM Sans', system-ui, sans-serif; }
   .action-btn:hover { background: var(--orange-pale); color: var(--orange); border-color: var(--orange); }
@@ -87,7 +77,6 @@
   .action-btn.download-full { background: var(--green); border-color: var(--green); color: #FFF8F0; font-weight: 500; }
   .action-btn.download-full:hover { background: #2d6624; }
   .action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
   .typing-row { display: none; }
   .typing-row.visible { display: flex; }
   .typing-dots { display: flex; gap: 5px; align-items: center; padding: 11px 15px; background: var(--warm-white); border: 1px solid var(--border); border-radius: 18px; border-bottom-left-radius: 5px; }
@@ -95,7 +84,6 @@
   .typing-dots span:nth-child(2) { animation-delay: 0.15s; }
   .typing-dots span:nth-child(3) { animation-delay: 0.30s; }
   @keyframes bounce { 0%, 60%, 100% { transform: translateY(0); opacity: 0.4; } 30% { transform: translateY(-7px); opacity: 1; } }
-
   .input-area { padding: 10px 0 14px; flex-shrink: 0; }
   .input-wrap { display: flex; gap: 8px; align-items: flex-end; background: var(--warm-white); border: 1.5px solid var(--border); border-radius: 24px; padding: 8px 8px 8px 16px; transition: border-color 0.2s; }
   .input-wrap:focus-within { border-color: var(--orange); }
@@ -117,6 +105,61 @@
   .chip:disabled { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
   .toast { position: fixed; bottom: 88px; left: 50%; transform: translateX(-50%) translateY(8px); background: var(--brown-dark); color: #FFF8F0; padding: 8px 18px; border-radius: 20px; font-size: 13px; opacity: 0; transition: opacity 0.25s, transform 0.25s; pointer-events: none; z-index: 100; white-space: nowrap; max-width: 90vw; text-align: center; }
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* ── Botón resumen flotante ── */
+  #resumeBtn {
+    position: fixed; bottom: 90px; right: 16px; z-index: 50;
+    background: var(--warm-white); border: 1.5px solid var(--border);
+    border-radius: 20px; padding: 7px 13px; font-size: 12px;
+    color: var(--brown-mid); cursor: pointer; display: none;
+    font-family: 'DM Sans', system-ui, sans-serif;
+    box-shadow: 0 2px 10px rgba(43,91,168,0.12);
+    transition: background 0.15s, border-color 0.15s;
+    align-items: center; gap: 5px;
+  }
+  #resumeBtn:hover { background: var(--orange-pale); border-color: var(--orange); }
+  #resumeBtn.visible { display: flex; }
+
+  /* ── Modal encuesta ── */
+  .modal-overlay {
+    position: fixed; inset: 0; z-index: 300;
+    background: rgba(15,32,68,0.45); backdrop-filter: blur(2px);
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px; opacity: 0; pointer-events: none;
+    transition: opacity 0.2s;
+  }
+  .modal-overlay.visible { opacity: 1; pointer-events: all; }
+  .modal-card {
+    background: var(--warm-white); border: 1px solid var(--border);
+    border-radius: 24px; padding: 28px 24px; max-width: 360px; width: 100%;
+    text-align: center; box-shadow: 0 8px 32px rgba(15,32,68,0.14);
+    transform: translateY(12px); transition: transform 0.2s;
+  }
+  .modal-overlay.visible .modal-card { transform: translateY(0); }
+  .modal-title { font-family: 'Fraunces', Georgia, serif; font-size: 1.1rem; font-weight: 600; color: var(--brown-dark); margin-bottom: 6px; }
+  .modal-sub { font-size: 12px; color: var(--brown-light); margin-bottom: 20px; }
+  .stars { display: flex; justify-content: center; gap: 8px; margin-bottom: 20px; }
+  .star { font-size: 28px; cursor: pointer; opacity: 0.35; transition: opacity 0.15s, transform 0.1s; user-select: none; }
+  .star:hover, .star.active { opacity: 1; transform: scale(1.15); }
+  .modal-label { font-size: 12px; font-weight: 500; color: var(--brown-mid); margin-bottom: 8px; text-align: left; }
+  .modal-select {
+    width: 100%; padding: 10px 12px; border: 1.5px solid var(--border);
+    border-radius: 12px; font-size: 13px; font-family: 'DM Sans', system-ui, sans-serif;
+    color: var(--brown-dark); background: var(--cream); outline: none;
+    transition: border-color 0.2s; margin-bottom: 20px;
+  }
+  .modal-select:focus { border-color: var(--orange); }
+  .modal-actions { display: flex; gap: 8px; }
+  .modal-btn { flex: 1; padding: 11px; border-radius: 12px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: 'DM Sans', system-ui, sans-serif; transition: background 0.15s; border: none; }
+  .modal-btn.primary { background: var(--orange); color: #FFF8F0; }
+  .modal-btn.primary:hover { background: var(--orange-hover); }
+  .modal-btn.primary:disabled { opacity: 0.5; cursor: not-allowed; }
+  .modal-btn.secondary { background: transparent; color: var(--brown-light); border: 1.5px solid var(--border); }
+  .modal-btn.secondary:hover { background: var(--orange-pale); }
+  .modal-thanks { display: none; padding: 16px 0 4px; }
+  .modal-thanks-icon { font-size: 36px; margin-bottom: 8px; }
+  .modal-thanks p { font-size: 13px; color: var(--brown-light); line-height: 1.5; }
+
   @media (max-width: 480px) {
     .page { padding: 8px 8px 0; }
     .header { padding: 10px 13px; border-radius: 16px; }
@@ -128,6 +171,7 @@
     .suggestions { gap: 6px; }
     .chip { font-size: 11px; padding: 5px 10px; }
     .toast { bottom: 80px; font-size: 12px; }
+    #resumeBtn { bottom: 80px; right: 12px; }
   }
 </style>
 </head>
@@ -135,49 +179,64 @@
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
+<!-- Botón resumen flotante -->
+<button id="resumeBtn" title="Generar resumen de esta consulta" onclick="triggerResumen()">
+  📋 Resumen
+</button>
+
+<!-- Modal encuesta de satisfacción -->
+<div class="modal-overlay" id="surveyModal" role="dialog" aria-modal="true" aria-label="Encuesta de satisfacción">
+  <div class="modal-card">
+    <div id="surveyForm">
+      <div class="modal-title">¿Te fue útil? 🗂️</div>
+      <div class="modal-sub">Solo 2 preguntas — menos de 10 segundos</div>
+      <div class="stars" id="starsRow" role="group" aria-label="Utilidad del 1 al 5">
+        <span class="star" data-v="1" onclick="setStar(1)" role="button" aria-label="1 estrella">⭐</span>
+        <span class="star" data-v="2" onclick="setStar(2)" role="button" aria-label="2 estrellas">⭐</span>
+        <span class="star" data-v="3" onclick="setStar(3)" role="button" aria-label="3 estrellas">⭐</span>
+        <span class="star" data-v="4" onclick="setStar(4)" role="button" aria-label="4 estrellas">⭐</span>
+        <span class="star" data-v="5" onclick="setStar(5)" role="button" aria-label="5 estrellas">⭐</span>
+      </div>
+      <div class="modal-label">¿Cuánto tiempo te ahorró?</div>
+      <select class="modal-select" id="surveyTiempo">
+        <option value="15">Menos de 15 min</option>
+        <option value="30">30 minutos</option>
+        <option value="60">1 hora</option>
+        <option value="120">Más de 2 horas</option>
+      </select>
+      <div class="modal-actions">
+        <button class="modal-btn secondary" onclick="closeModal()">Omitir</button>
+        <button class="modal-btn primary" id="surveySubmitBtn" onclick="submitSurvey()" disabled>Enviar</button>
+      </div>
+    </div>
+    <div class="modal-thanks" id="surveyThanks">
+      <div class="modal-thanks-icon">🙌</div>
+      <div class="modal-title">¡Gracias!</div>
+      <p>Tu opinión nos ayuda a mejorar Norma para todos los directivos.</p>
+    </div>
+  </div>
+</div>
+
 <!-- Pantalla de acceso PIN -->
-<div id="pinScreen" style="
-  position:fixed; inset:0; z-index:200;
-  background:var(--cream);
-  display:flex; align-items:center; justify-content:center;
-  padding:20px;
-">
-  <div style="
-    background:var(--warm-white); border:1px solid var(--border);
-    border-radius:24px; padding:32px 28px; max-width:360px; width:100%;
-    text-align:center; box-shadow:0 4px 24px rgba(61,31,10,0.08);
-  ">
+<div id="pinScreen" style="position:fixed;inset:0;z-index:200;background:var(--cream);display:flex;align-items:center;justify-content:center;padding:20px;">
+  <div style="background:var(--warm-white);border:1px solid var(--border);border-radius:24px;padding:32px 28px;max-width:360px;width:100%;text-align:center;box-shadow:0 4px 24px rgba(61,31,10,0.08);">
     <img src="https://i.imgur.com/EYnAfim.jpeg" alt="Norma"
-      style="width:200px; height:200px; object-fit:contain; margin-bottom:16px; display:block; margin-left:auto; margin-right:auto;"
+      style="width:200px;height:200px;object-fit:contain;margin-bottom:16px;display:block;margin-left:auto;margin-right:auto;"
       onerror="this.style.display='none'">
-    <div style="font-size:13px; color:var(--brown-light); margin-bottom:24px; line-height:1.5;">Ingresá tu código de acceso institucional</div>
+    <div style="font-size:13px;color:var(--brown-light);margin-bottom:24px;line-height:1.5;">Ingresá tu código de acceso institucional</div>
     <input id="pinInput" type="text" placeholder="Ej: JESUSMARIA2026"
       maxlength="20" autocomplete="off" spellcheck="false"
-      style="
-        width:100%; padding:12px 16px; border:1.5px solid var(--border);
-        border-radius:14px; font-size:15px; font-family:'DM Sans',system-ui,sans-serif;
-        text-align:center; text-transform:uppercase; letter-spacing:2px;
-        background:var(--cream); color:var(--brown-dark); outline:none;
-        transition:border-color 0.2s; margin-bottom:8px;
-      "
-    >
-    <div id="pinError" style="font-size:12px; color:var(--red); min-height:18px; margin-bottom:12px;"></div>
-    <button id="pinBtn" onclick="submitPin()" style="
-      width:100%; padding:13px; background:var(--orange); color:#FFF8F0;
-      border:none; border-radius:14px; font-size:15px; font-weight:500;
-      font-family:'DM Sans',system-ui,sans-serif; cursor:pointer;
-      transition:background 0.15s;
-    ">Ingresar</button>
-    <div style="font-size:11px; color:var(--brown-light); opacity:0.5; margin-top:16px;">
-      Si no tenés código, contactá a tu institución.
-    </div>
+      style="width:100%;padding:12px 16px;border:1.5px solid var(--border);border-radius:14px;font-size:15px;font-family:'DM Sans',system-ui,sans-serif;text-align:center;text-transform:uppercase;letter-spacing:2px;background:var(--cream);color:var(--brown-dark);outline:none;transition:border-color 0.2s;margin-bottom:8px;">
+    <div id="pinError" style="font-size:12px;color:var(--red);min-height:18px;margin-bottom:12px;"></div>
+    <button id="pinBtn" onclick="submitPin()" style="width:100%;padding:13px;background:var(--orange);color:#FFF8F0;border:none;border-radius:14px;font-size:15px;font-weight:500;font-family:'DM Sans',system-ui,sans-serif;cursor:pointer;transition:background 0.15s;">Ingresar</button>
+    <div style="font-size:11px;color:var(--brown-light);opacity:0.5;margin-top:16px;">Si no tenés código, contactá a tu institución.</div>
   </div>
 </div>
 
 <div class="page" id="mainPage" style="display:none;">
   <header class="header" role="banner">
     <div class="avatar-ring" id="avatarRing">
-      <img src="https://i.imgur.com/PTiJ7tK.jpeg" alt="Clara"
+      <img src="https://i.imgur.com/PTiJ7tK.jpeg" alt="Norma"
            onerror="this.style.display='none'; document.getElementById('avatarRing').textContent='👩‍🏫';">
     </div>
     <div class="header-text">
@@ -188,27 +247,10 @@
       <div class="status-dot"></div>
       <span id="statusText">En línea</span>
     </div>
-    <button id="newChatBtn" title="Nueva consulta" onclick="resetChat()" style="
-      width:34px;height:34px;border-radius:50%;border:1.5px solid var(--border);
-      background:var(--warm-white);cursor:pointer;display:flex;align-items:center;
-      justify-content:center;flex-shrink:0;transition:background 0.15s;
-      font-size:15px;color:var(--brown-light);
-    " aria-label="Nueva consulta">↺</button>
+    <button id="newChatBtn" title="Nueva consulta" onclick="resetChat()" style="width:34px;height:34px;border-radius:50%;border:1.5px solid var(--border);background:var(--warm-white);cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background 0.15s;font-size:15px;color:var(--brown-light);" aria-label="Nueva consulta">↺</button>
   </header>
 
-  <div class="offline-banner" id="offlineBanner" role="alert">
-    Sin conexión a internet. Revisá tu red para continuar.
-  </div>
-
-  <!-- Barra de progreso Plan Anual -->
-  <div class="plan-progress" id="planProgress">
-    <div class="plan-progress-label" id="planProgressLabel">Plan Anual — Generando período 1 de 3</div>
-    <div class="plan-progress-steps">
-      <div class="plan-step" id="planStep1"></div>
-      <div class="plan-step" id="planStep2"></div>
-      <div class="plan-step" id="planStep3"></div>
-    </div>
-  </div>
+  <div class="offline-banner" id="offlineBanner" role="alert">Sin conexión a internet. Revisá tu red para continuar.</div>
 
   <main class="messages" id="messages" role="log" aria-live="polite">
     <div class="msg-row bot">
@@ -228,6 +270,7 @@
       <button class="chip" onclick="setFlow('actas'); sendSuggestion('Necesito hacer un acta de reunión')">Acta de reunión 📄</button>
       <button class="chip" onclick="setFlow('comunicados'); sendSuggestion('Necesito hacer un comunicado')">Comunicado 📢</button>
       <button class="chip" onclick="setFlow('proyectos'); sendSuggestion('Necesito armar un proyecto institucional')">Proyecto institucional 🏫</button>
+      <button class="chip" onclick="setFlow('licencias'); sendSuggestion('Necesito gestionar una licencia docente')">Licencias docentes 📋</button>
       <button class="chip" onclick="setFlow('general'); sendSuggestion('Tengo una consulta de gestión')">Consulta de gestión 💬</button>
     </div>
 
@@ -261,24 +304,28 @@
     </div>
   </div>
 </div>
-</div>
 
 <script>
 // ── Config ──────────────────────────────────────────────────────
 const WORKER_URL    = 'https://norma-aulaclara.abfacundotorres.workers.dev';
+const METRICS_URL   = 'https://norma-aulaclara.abfacundotorres.workers.dev'; // mismo endpoint — el Apps Script se encarga
 const MAX_CHARS     = 2000;
 const MAX_RETRY     = 2;
 const RETRY_BASE    = 1200;
 const CLIENT_TMOUT  = 33000;
 const HISTORY_LIMIT = 16;
+const RESUME_THRESHOLD = 4; // mensajes mínimos para mostrar botón resumen
 
 // ── State ───────────────────────────────────────────────────────
-let history    = [];
-let isLoading  = false;
-let toastTimer = null;
-let sessionPin = null;
-let activeFlow = 'general';
+let history      = [];
+let isLoading    = false;
+let toastTimer   = null;
+let sessionPin   = null;
+let activeFlow   = 'general';
 let directivoCtx = { nombre: '', cargo: '' };
+let surveyRating = 0;
+let lastDocTitle = '';
+let messageCount = 0;
 
 // ── DOM refs ────────────────────────────────────────────────────
 const $   = id => document.getElementById(id);
@@ -291,7 +338,6 @@ function isDoc(t) {
   return t.includes('[TITULO]') || t.includes('[FIN_DOCUMENTO]');
 }
 
-// Captura nombre/cargo del directivo
 function extractDirectivoCtx(text) {
   const nameMatch = text.match(/(?:me llamo|mi nombre es)\s+([A-ZÁÉÍÓÚÜÑ][a-záéíóúüñ]{2,}(?:\s+[A-ZÁÉÍÓÚÜÑ][a-záéíóúüñ]{2,})?)/i);
   if (nameMatch) directivoCtx.nombre = nameMatch[1].trim();
@@ -414,15 +460,86 @@ async function generateWord(rawContent) {
   a.click(); setTimeout(()=>URL.revokeObjectURL(url),3000);
 }
 
+// ── Encuesta ────────────────────────────────────────────────────
+function setStar(n) {
+  surveyRating = n;
+  document.querySelectorAll('.star').forEach((s,i) => s.classList.toggle('active', i < n));
+  $('surveySubmitBtn').disabled = false;
+}
+
+function openModal(docTitle) {
+  lastDocTitle = docTitle || '';
+  surveyRating = 0;
+  document.querySelectorAll('.star').forEach(s => s.classList.remove('active'));
+  $('surveySubmitBtn').disabled = true;
+  $('surveyForm').style.display = 'block';
+  $('surveyThanks').style.display = 'none';
+  $('surveyModal').classList.add('visible');
+}
+
+function closeModal() {
+  $('surveyModal').classList.remove('visible');
+}
+
+async function submitSurvey() {
+  const btn = $('surveySubmitBtn');
+  btn.disabled = true; btn.textContent = 'Enviando…';
+  try {
+    await fetch(WORKER_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        // El worker no procesa encuestas directamente —
+        // en producción esto iría a un endpoint dedicado o al Apps Script directo.
+        // Por ahora lo enviamos al worker con un campo especial ignorado.
+        _survey: true,
+        tipo: 'encuesta',
+        timestamp: new Date().toISOString(),
+        municipio: sessionPin || 'demo',
+        flow: activeFlow,
+        documento: lastDocTitle,
+        utilidad: surveyRating,
+        tiempo: $('surveyTiempo').value,
+      }),
+    });
+  } catch { /* silencioso — no bloquear UX por fallo de encuesta */ }
+  $('surveyForm').style.display = 'none';
+  $('surveyThanks').style.display = 'block';
+  setTimeout(closeModal, 2200);
+}
+
+// ── Botón resumen ───────────────────────────────────────────────
+function updateResumeBtn() {
+  $('resumeBtn').classList.toggle('visible', messageCount >= RESUME_THRESHOLD && !isLoading);
+}
+
+async function triggerResumen() {
+  if(isLoading) return;
+  const prevFlow = activeFlow;
+  activeFlow = 'resumen';
+  await sendMessage('Generá un resumen de esta consulta');
+  activeFlow = prevFlow;
+}
+
 // ── Download button ─────────────────────────────────────────────
-function makeDownloadBtn(content,label='⬇️ Descargar Word',cls='download') {
-  const b=document.createElement('button');
-  b.className=`action-btn ${cls}`; b.innerHTML=label;
-  b.onclick=async()=>{
+function makeDownloadBtn(content, label='⬇️ Descargar Word', cls='download') {
+  const b = document.createElement('button');
+  b.className = `action-btn ${cls}`; b.innerHTML = label;
+  const titleMatch = content.match(/\[TITULO\]\s*([^\n]+)/);
+  const docTitle = titleMatch ? titleMatch[1].trim() : 'documento';
+  b.onclick = async () => {
     if(window._docxError){showToast('Librería Word no disponible.');return;}
-    b.innerHTML='⏳ Generando...'; b.disabled=true;
-    try{await generateWord(content);b.innerHTML='✅ Descargado';setTimeout(()=>{b.innerHTML=label;b.disabled=false;},3000);}
-    catch(e){b.innerHTML='❌ Error';b.disabled=false;showToast(e.message||'Error al generar.');}
+    b.innerHTML='⏳ Generando…'; b.disabled=true;
+    try {
+      await generateWord(content);
+      b.innerHTML='✅ Descargado';
+      setTimeout(()=>{b.innerHTML=label;b.disabled=false;},3000);
+      // Abrir encuesta después de descarga exitosa
+      setTimeout(()=>openModal(docTitle), 800);
+    } catch(e) {
+      b.innerHTML='❌ Error'; b.disabled=false;
+      showToast(e.message||'Error al generar.');
+    }
   };
   return b;
 }
@@ -441,7 +558,6 @@ function appendMessage(text, role) {
   bubble.innerHTML=renderText(text); wrap.appendChild(bubble);
   if(role==='bot'){
     const acts=document.createElement('div'); acts.className='bubble-actions';
-    // Copy
     const cp=document.createElement('button'); cp.className='action-btn'; cp.innerHTML='📋 Copiar';
     cp.onclick=()=>{
       const plain=text.replace(/\[TITULO\]\s*/g,'').replace(/\[SECCION\]\s*/g,'')
@@ -510,6 +626,7 @@ async function fetchMsg(message, attempt=0) {
 async function sendMessage(text) {
   if(!text.trim()||isLoading) return;
   isLoading=true; btn.disabled=true; setChips(true);
+  $('resumeBtn').classList.remove('visible');
   extractDirectivoCtx(text);
   appendMessage(text,'user');
   $('typingRow').classList.add('visible');
@@ -518,6 +635,8 @@ async function sendMessage(text) {
   if(activeFlow==='actas') loadTimer=setTimeout(()=>showToast('Norma está armando el acta…',15000),2500);
   else if(activeFlow==='proyectos') loadTimer=setTimeout(()=>showToast('Norma está armando el proyecto…',15000),2500);
   else if(activeFlow==='comunicados') loadTimer=setTimeout(()=>showToast('Norma está redactando el comunicado…',15000),2500);
+  else if(activeFlow==='licencias') loadTimer=setTimeout(()=>showToast('Norma está consultando la normativa…',15000),2500);
+  else if(activeFlow==='resumen') loadTimer=setTimeout(()=>showToast('Norma está generando el resumen…',15000),2500);
   const pending={role:'user',parts:[{text}]};
   try {
     const reply=await fetchMsg(text);
@@ -525,13 +644,16 @@ async function sendMessage(text) {
     appendMessage(reply,'bot');
     history.push(pending); history.push({role:'model',parts:[{text:reply}]});
     if(history.length>HISTORY_LIMIT*2) history=history.slice(-HISTORY_LIMIT*2);
+    messageCount++;
+    updateResumeBtn();
   } catch(err) {
     $('typingRow').classList.remove('visible');
     const msgs={rate_limit:'Demasiadas consultas. Esperá un minuto.',offline:'Sin conexión. Revisá tu red.'};
     appendMessage(msgs[err.message]||(err.name==='AbortError'?'Tardó demasiado. Intentá de nuevo.':err.message?.length<120?err.message:'Problema técnico. Intentá de nuevo.'),'bot');
   } finally {
     if(loadTimer)clearTimeout(loadTimer);
-    isLoading=false; btn.disabled=inp.value.trim().length===0; setChips(false); inp.focus();
+    isLoading=false; btn.disabled=inp.value.trim().length===0; setChips(false);
+    updateResumeBtn(); inp.focus();
   }
 }
 
@@ -545,7 +667,7 @@ function setFlow(f){activeFlow=f;}
 
 function sendSuggestion(text){
   if(isLoading)return; if(sug)sug.style.display='none';
-  directivoCtx.cargo=''; // resetear cargo al cambiar flujo, nombre persiste
+  directivoCtx.cargo='';
   inp.value=text; autoResize(); updateChar(); handleSend();
 }
 
@@ -554,6 +676,7 @@ function handleSend(){const text=inp.value.trim();if(!text||isLoading)return;inp
 function resetChat(){
   if(isLoading)return;
   history=[]; activeFlow='general'; directivoCtx={nombre:'',cargo:''};
+  messageCount=0; $('resumeBtn').classList.remove('visible');
   msg.querySelectorAll('.msg-row').forEach((r,i)=>{if(i>0)r.remove();});
   if(sug)sug.style.display='flex';
   inp.value=''; autoResize(); updateChar();
@@ -569,6 +692,10 @@ function submitPin(){
 $('pinInput').addEventListener('keydown',e=>{if(e.key==='Enter')submitPin();});
 $('pinInput').addEventListener('focus',function(){this.style.borderColor='var(--orange)';});
 $('pinInput').addEventListener('blur',function(){this.style.borderColor='var(--border)';});
+
+// ── Modal keyboard close ─────────────────────────────────────────
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal();});
+$('surveyModal').addEventListener('click',e=>{if(e.target===$('surveyModal'))closeModal();});
 
 // ── Events ───────────────────────────────────────────────────────
 btn.addEventListener('click',handleSend);
