@@ -106,34 +106,34 @@
   .toast { position: fixed; bottom: 88px; left: 50%; transform: translateX(-50%) translateY(8px); background: var(--brown-dark); color: #FFF8F0; padding: 8px 18px; border-radius: 20px; font-size: 13px; opacity: 0; transition: opacity 0.25s, transform 0.25s; pointer-events: none; z-index: 100; white-space: nowrap; max-width: 90vw; text-align: center; }
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
-  /* ── Botones flotantes toast (resumen + encuesta) ── */
+  /* ── Botones flotantes (resumen + encuesta) — abajo a la derecha, sobre el input ── */
   .float-toast {
-    position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%) translateY(12px);
-    z-index: 50; display: none; align-items: center; justify-content: center; gap: 8px;
-    padding: 13px 26px; border-radius: 28px; font-size: 14px; font-weight: 600;
-    font-family: 'DM Sans', system-ui, sans-serif; cursor: pointer; border: none;
-    box-shadow: 0 4px 20px rgba(43,91,168,0.22);
-    transition: background 0.15s, transform 0.15s, box-shadow 0.15s;
-    white-space: nowrap; max-width: 88vw;
+    position: fixed; right: 14px; z-index: 10;
+    display: none; align-items: center; gap: 6px;
+    padding: 8px 14px; border-radius: 20px; font-size: 12px; font-weight: 600;
+    font-family: 'DM Sans', system-ui, sans-serif; cursor: pointer;
+    box-shadow: 0 2px 12px rgba(43,91,168,0.18);
+    transition: background 0.15s, box-shadow 0.15s, transform 0.1s;
+    white-space: nowrap;
   }
   .float-toast.visible {
     display: flex;
-    animation: toastUp 0.3s ease-out forwards;
+    animation: floatIn 0.25s ease-out forwards;
   }
-  @keyframes toastUp {
-    from { opacity: 0; transform: translateX(-50%) translateY(20px); }
-    to   { opacity: 1; transform: translateX(-50%) translateY(0);    }
+  @keyframes floatIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to   { opacity: 1; transform: translateY(0);   }
   }
   #resumeBtn {
-    background: var(--warm-white); border: 2px solid var(--orange);
-    color: var(--orange);
+    bottom: 110px;
+    background: var(--warm-white); border: 1.5px solid var(--orange); color: var(--orange);
   }
-  #resumeBtn:hover { background: var(--orange-pale); box-shadow: 0 6px 24px rgba(43,91,168,0.28); transform: translateX(-50%) translateY(-2px); }
+  #resumeBtn:hover { background: var(--orange-pale); transform: translateY(-1px); }
   #surveyFloatBtn {
-    background: var(--orange); color: #FFF8F0;
-    bottom: 90px;
+    bottom: 66px;
+    background: var(--orange); border: none; color: #FFF8F0;
   }
-  #surveyFloatBtn:hover { background: var(--orange-hover); box-shadow: 0 6px 24px rgba(43,91,168,0.32); transform: translateX(-50%) translateY(-2px); }
+  #surveyFloatBtn:hover { background: var(--orange-hover); transform: translateY(-1px); }
 
   /* ── Modal encuesta ── */
   .modal-overlay {
@@ -188,7 +188,8 @@
     .suggestions { gap: 6px; }
     .chip { font-size: 11px; padding: 5px 10px; }
     .toast { bottom: 80px; font-size: 12px; }
-    .float-toast { bottom: 80px; font-size: 13px; padding: 11px 20px; }
+    #resumeBtn { bottom: 100px; right: 10px; }
+    #surveyFloatBtn { bottom: 58px; right: 10px; }
   }
 </style>
 </head>
