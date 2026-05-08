@@ -109,43 +109,45 @@
   /* ── Botones flotantes (resumen + encuesta) ── */
   .float-toast {
     position: fixed;
-    right: 14px;
+    left: 50%;
     z-index: 10;
     display: none;
     align-items: center;
-    gap: 7px;
-    padding: 10px 18px;
-    border-radius: 22px;
-    font-size: 13px;
+    gap: 8px;
+    padding: 12px 22px;
+    border-radius: 24px;
+    font-size: 14px;
     font-weight: 600;
     font-family: 'DM Sans', system-ui, sans-serif;
     cursor: pointer;
-    box-shadow: 0 3px 14px rgba(43,91,168,0.20);
+    box-shadow: 0 3px 16px rgba(43,91,168,0.22);
     transition: background 0.15s, box-shadow 0.15s, transform 0.1s;
     white-space: nowrap;
+    /* Alineado al borde derecho del contenedor de chat (max 680px) */
+    transform: translateX(calc(min(340px, 50vw) - 100% - 14px));
   }
   .float-toast.visible {
     display: flex;
     animation: floatIn 0.25s ease-out forwards;
   }
   @keyframes floatIn {
-    from { opacity: 0; transform: translateY(10px); }
-    to   { opacity: 1; transform: translateY(0);    }
+    from { opacity: 0; transform: translateX(calc(min(340px, 50vw) - 100% - 14px)) translateY(10px); }
+    to   { opacity: 1; transform: translateX(calc(min(340px, 50vw) - 100% - 14px)) translateY(0);    }
   }
   #resumeBtn {
-    bottom: 118px;
+    bottom: 122px;
     background: var(--warm-white);
     border: 2px solid var(--orange);
     color: var(--orange);
   }
-  #resumeBtn:hover { background: var(--orange-pale); transform: translateY(-2px); box-shadow: 0 5px 18px rgba(43,91,168,0.26); }
+  #resumeBtn:hover { background: var(--orange-pale); box-shadow: 0 5px 20px rgba(43,91,168,0.28); }
   #surveyFloatBtn {
-    bottom: 70px;
+    bottom: 72px;
     background: var(--orange);
     border: none;
     color: #FFF8F0;
   }
-  #surveyFloatBtn:hover { background: var(--orange-hover); transform: translateY(-2px); box-shadow: 0 5px 18px rgba(43,91,168,0.30); }
+  #surveyFloatBtn:hover { background: var(--orange-hover); box-shadow: 0 5px 20px rgba(43,91,168,0.32); }
 
   /* ── Modal encuesta ── */
   .modal-overlay {
@@ -200,8 +202,9 @@
     .suggestions { gap: 6px; }
     .chip { font-size: 11px; padding: 5px 10px; }
     .toast { bottom: 80px; font-size: 12px; }
-    #resumeBtn { bottom: 108px; right: 10px; font-size: 12px; padding: 9px 14px; }
-    #surveyFloatBtn { bottom: 62px; right: 10px; font-size: 12px; padding: 9px 14px; }
+    .float-toast { transform: translateX(calc(50vw - 100% - 10px)); font-size: 13px; padding: 11px 18px; }
+    #resumeBtn { bottom: 112px; }
+    #surveyFloatBtn { bottom: 64px; }
   }
 </style>
 </head>
@@ -534,7 +537,8 @@ async function submitSurvey() {
   try {
     await fetch(APPS_SCRIPT_URL, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      redirect: 'follow',
+      headers: { 'Content-Type': 'text/plain' }, // text/plain evita CORS preflight en Apps Script
       body: JSON.stringify({
         tipo:       'encuesta',
         timestamp:  new Date().toISOString(),
@@ -546,7 +550,6 @@ async function submitSurvey() {
         utilidad:   surveyRating,
         tiempo:     $('surveyTiempo').value,
       }),
-      mode: 'no-cors',
     });
   } catch { /* silencioso */ }
   surveyShown = true;
