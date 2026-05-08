@@ -160,6 +160,23 @@
   .modal-thanks-icon { font-size: 36px; margin-bottom: 8px; }
   .modal-thanks p { font-size: 13px; color: var(--brown-light); line-height: 1.5; }
 
+
+  /* ── Botón encuesta flotante ── */
+  #surveyFloatBtn {
+    position: fixed; bottom: 130px; right: 16px; z-index: 50;
+    background: var(--orange); border: none;
+    border-radius: 20px; padding: 8px 14px; font-size: 12px;
+    color: #FFF8F0; cursor: pointer; display: none;
+    font-family: 'DM Sans', system-ui, sans-serif;
+    box-shadow: 0 2px 12px rgba(43,91,168,0.25);
+    transition: background 0.15s, transform 0.15s;
+    align-items: center; gap: 6px; font-weight: 500;
+    animation: slideInRight 0.3s ease-out;
+  }
+  #surveyFloatBtn:hover { background: var(--orange-hover); transform: scale(1.03); }
+  #surveyFloatBtn.visible { display: flex; }
+  @keyframes slideInRight { from { opacity:0; transform:translateX(20px); } to { opacity:1; transform:translateX(0); } }
+
   @media (max-width: 480px) {
     .page { padding: 8px 8px 0; }
     .header { padding: 10px 13px; border-radius: 16px; }
@@ -172,12 +189,18 @@
     .chip { font-size: 11px; padding: 5px 10px; }
     .toast { bottom: 80px; font-size: 12px; }
     #resumeBtn { bottom: 80px; right: 12px; }
+    #surveyFloatBtn { bottom: 120px; right: 12px; }
   }
 </style>
 </head>
 <body>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<!-- Botón encuesta flotante -->
+<button id="surveyFloatBtn" onclick="openModal('')" title="¿Te fue útil Norma hoy?">
+  ⭐ ¿Te fue útil?
+</button>
 
 <!-- Botón resumen flotante -->
 <button id="resumeBtn" title="Generar resumen de esta consulta" onclick="triggerResumen()">
@@ -267,11 +290,11 @@
     </div>
 
     <div class="suggestions" id="suggestions">
-      <button class="chip" onclick="setFlow('actas'); sendSuggestion('Necesito hacer un acta de reunión')">Acta de reunión 📄</button>
-      <button class="chip" onclick="setFlow('comunicados'); sendSuggestion('Necesito hacer un comunicado')">Comunicado 📢</button>
-      <button class="chip" onclick="setFlow('proyectos'); sendSuggestion('Necesito armar un proyecto institucional')">Proyecto institucional 🏫</button>
-      <button class="chip" onclick="setFlow('licencias'); sendSuggestion('Necesito gestionar una licencia docente')">Licencias docentes 📋</button>
-      <button class="chip" onclick="setFlow('general'); sendSuggestion('Tengo una consulta de gestión')">Consulta de gestión 💬</button>
+      <button class="chip" onclick="setFlow('actas'); sendSuggestion('Necesito hacer un acta de reunión','Acta de reunión')">Acta de reunión 📄</button>
+      <button class="chip" onclick="setFlow('comunicados'); sendSuggestion('Necesito hacer un comunicado','Comunicado')">Comunicado 📢</button>
+      <button class="chip" onclick="setFlow('proyectos'); sendSuggestion('Necesito armar un proyecto institucional','Proyecto institucional')">Proyecto institucional 🏫</button>
+      <button class="chip" onclick="setFlow('licencias'); sendSuggestion('Necesito gestionar una licencia docente','Licencias docentes')">Licencias docentes 📋</button>
+      <button class="chip" onclick="setFlow('general'); sendSuggestion('Tengo una consulta de gestión','Consulta de gestión')">Consulta de gestión 💬</button>
     </div>
 
     <div class="typing-row" id="typingRow">
@@ -315,6 +338,8 @@ const RETRY_BASE    = 1200;
 const CLIENT_TMOUT  = 33000;
 const HISTORY_LIMIT = 16;
 const RESUME_THRESHOLD = 4; // mensajes mínimos para mostrar botón resumen
+const SURVEY_THRESHOLD  = 5; // mensajes para mostrar botón encuesta flotante
+const APPS_SCRIPT_URL   = 'https://script.google.com/macros/s/AKfycbxSbuDSkNdY0-SckcAeGc2fYlSY6_mXazlhvJ8LPzg-P32X-7ovKhPuV-yagz8-bq01eA/exec'; // URL del Apps Script de métricas
 
 // ── State ───────────────────────────────────────────────────────
 let history      = [];
@@ -326,6 +351,8 @@ let directivoCtx = { nombre: '', cargo: '' };
 let surveyRating = 0;
 let lastDocTitle = '';
 let messageCount = 0;
+let surveyShown   = false;
+let sessionChip   = '';  // chip que usó el usuario para iniciar
 
 // ── DOM refs ────────────────────────────────────────────────────
 const $   = id => document.getElementById(id);
@@ -469,6 +496,7 @@ function setStar(n) {
 
 function openModal(docTitle) {
   lastDocTitle = docTitle || '';
+  $('surveyFloatBtn').classList.remove('visible');
   surveyRating = 0;
   document.querySelectorAll('.star').forEach(s => s.classList.remove('active'));
   $('surveySubmitBtn').disabled = true;
@@ -479,30 +507,34 @@ function openModal(docTitle) {
 
 function closeModal() {
   $('surveyModal').classList.remove('visible');
+  // Si no completó la encuesta y quedan mensajes, volver a mostrar flotante
+  if (!surveyShown && messageCount >= SURVEY_THRESHOLD) {
+    setTimeout(() => $('surveyFloatBtn').classList.add('visible'), 3000);
+  }
 }
 
 async function submitSurvey() {
   const btn = $('surveySubmitBtn');
   btn.disabled = true; btn.textContent = 'Enviando…';
   try {
-    await fetch(WORKER_URL, {
+    await fetch(APPS_SCRIPT_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        // El worker no procesa encuestas directamente —
-        // en producción esto iría a un endpoint dedicado o al Apps Script directo.
-        // Por ahora lo enviamos al worker con un campo especial ignorado.
-        _survey: true,
-        tipo: 'encuesta',
-        timestamp: new Date().toISOString(),
-        municipio: sessionPin || 'demo',
-        flow: activeFlow,
-        documento: lastDocTitle,
-        utilidad: surveyRating,
-        tiempo: $('surveyTiempo').value,
+        tipo:       'encuesta',
+        timestamp:  new Date().toISOString(),
+        municipio:  sessionPin  || 'demo',
+        flow:       activeFlow,
+        chip_usado: sessionChip || '',
+        documento:  lastDocTitle,
+        utilidad:   surveyRating,
+        tiempo:     $('surveyTiempo').value,
       }),
+      mode: 'no-cors',
     });
-  } catch { /* silencioso — no bloquear UX por fallo de encuesta */ }
+  } catch { /* silencioso */ }
+  surveyShown = true;
+  $('surveyFloatBtn').classList.remove('visible');
   $('surveyForm').style.display = 'none';
   $('surveyThanks').style.display = 'block';
   setTimeout(closeModal, 2200);
@@ -511,6 +543,10 @@ async function submitSurvey() {
 // ── Botón resumen ───────────────────────────────────────────────
 function updateResumeBtn() {
   $('resumeBtn').classList.toggle('visible', messageCount >= RESUME_THRESHOLD && !isLoading);
+  // Mostrar botón encuesta flotante a los 5 mensajes, una sola vez por sesión
+  if (messageCount >= SURVEY_THRESHOLD && !surveyShown && !isLoading) {
+    $('surveyFloatBtn').classList.add('visible');
+  }
 }
 
 async function triggerResumen() {
@@ -597,7 +633,7 @@ async function fetchMsg(message, attempt=0) {
   try {
     const res=await fetch(WORKER_URL,{
       method:'POST', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({message,history:historyPayload(),pin:sessionPin,flow:activeFlow,ctx:directivoCtx}),
+      body:JSON.stringify({message,history:historyPayload(),pin:sessionPin,flow:activeFlow,ctx:directivoCtx,chip_usado:sessionChip}),
       signal:ctrl.signal,
     });
     clearTimeout(tmout);
@@ -665,9 +701,10 @@ function updateChar(){const left=MAX_CHARS-inp.value.length,el=$('charCount');el
 function setStatus(online){$('statusBadge').className=`status-badge ${online?'online':'offline'}`;$('statusText').textContent=online?'En línea':'Sin conexión';$('offlineBanner').classList.toggle('visible',!online);}
 function setFlow(f){activeFlow=f;}
 
-function sendSuggestion(text){
+function sendSuggestion(text, chip){
   if(isLoading)return; if(sug)sug.style.display='none';
   directivoCtx.cargo='';
+  sessionChip = chip || '';
   inp.value=text; autoResize(); updateChar(); handleSend();
 }
 
@@ -676,6 +713,8 @@ function handleSend(){const text=inp.value.trim();if(!text||isLoading)return;inp
 function resetChat(){
   if(isLoading)return;
   history=[]; activeFlow='general'; directivoCtx={nombre:'',cargo:''};
+  surveyShown=false; sessionChip='';
+  $('surveyFloatBtn').classList.remove('visible');
   messageCount=0; $('resumeBtn').classList.remove('visible');
   msg.querySelectorAll('.msg-row').forEach((r,i)=>{if(i>0)r.remove();});
   if(sug)sug.style.display='flex';
