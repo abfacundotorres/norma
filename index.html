@@ -525,9 +525,12 @@ function openModal(docTitle) {
 
 function closeModal() {
   $('surveyModal').classList.remove('visible');
-  // Si no completó la encuesta y quedan mensajes, volver a mostrar flotante
+  // Solo volver a mostrar si NO completó la encuesta
   if (!surveyShown && messageCount >= SURVEY_THRESHOLD) {
-    setTimeout(() => $('surveyFloatBtn').classList.add('visible'), 3000);
+    setTimeout(() => {
+      $('surveyFloatBtn').style.display = ''; // restaurar display
+      $('surveyFloatBtn').classList.add('visible');
+    }, 3000);
   }
 }
 
@@ -554,6 +557,7 @@ async function submitSurvey() {
   } catch { /* silencioso */ }
   surveyShown = true;
   $('surveyFloatBtn').classList.remove('visible');
+  $('surveyFloatBtn').style.display = 'none'; // ocultar permanentemente
   $('surveyForm').style.display = 'none';
   $('surveyThanks').style.display = 'block';
   setTimeout(closeModal, 2200);
@@ -590,8 +594,23 @@ function makeDownloadBtn(content, label='⬇️ Descargar Word', cls='download')
       await generateWord(content);
       b.innerHTML='✅ Descargado';
       setTimeout(()=>{b.innerHTML=label;b.disabled=false;},3000);
-      // Abrir encuesta después de descarga exitosa
-      setTimeout(()=>openModal(docTitle), 800);
+      // Registrar descarga en métricas
+      try {
+        fetch(APPS_SCRIPT_URL, {
+          method:'POST', redirect:'follow',
+          headers:{'Content-Type':'text/plain'},
+          body: JSON.stringify({
+            tipo:'evento', timestamp:new Date().toISOString(),
+            session_id:SESSION_ID, municipio:sessionPin||'demo',
+            flow:activeFlow, chip_usado:sessionChip||'',
+            doc_descargado:docTitle,
+            rag_usado:false, rag_chunks:0, rag_error:false,
+            model_used:'download',
+          }),
+        });
+      } catch {}
+      // Abrir encuesta después de descarga — solo si no completó
+      if (!surveyShown) setTimeout(()=>openModal(docTitle), 800);
     } catch(e) {
       b.innerHTML='❌ Error'; b.disabled=false;
       showToast(e.message||'Error al generar.');
@@ -734,6 +753,7 @@ function resetChat(){
   if(isLoading)return;
   history=[]; activeFlow='general'; directivoCtx={nombre:'',cargo:''};
   surveyShown=false; sessionChip='';
+  $('surveyFloatBtn').style.display='';
   $('surveyFloatBtn').classList.remove('visible');
   messageCount=0; $('resumeBtn').classList.remove('visible');
   msg.querySelectorAll('.msg-row').forEach((r,i)=>{if(i>0)r.remove();});
