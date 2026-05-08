@@ -106,13 +106,21 @@
   .toast { position: fixed; bottom: 88px; left: 50%; transform: translateX(-50%) translateY(8px); background: var(--brown-dark); color: #FFF8F0; padding: 8px 18px; border-radius: 20px; font-size: 13px; opacity: 0; transition: opacity 0.25s, transform 0.25s; pointer-events: none; z-index: 100; white-space: nowrap; max-width: 90vw; text-align: center; }
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
-  /* ── Botones flotantes (resumen + encuesta) — abajo a la derecha, sobre el input ── */
+  /* ── Botones flotantes (resumen + encuesta) ── */
   .float-toast {
-    position: fixed; right: 14px; z-index: 10;
-    display: none; align-items: center; gap: 6px;
-    padding: 8px 14px; border-radius: 20px; font-size: 12px; font-weight: 600;
-    font-family: 'DM Sans', system-ui, sans-serif; cursor: pointer;
-    box-shadow: 0 2px 12px rgba(43,91,168,0.18);
+    position: fixed;
+    right: 14px;
+    z-index: 10;
+    display: none;
+    align-items: center;
+    gap: 7px;
+    padding: 10px 18px;
+    border-radius: 22px;
+    font-size: 13px;
+    font-weight: 600;
+    font-family: 'DM Sans', system-ui, sans-serif;
+    cursor: pointer;
+    box-shadow: 0 3px 14px rgba(43,91,168,0.20);
     transition: background 0.15s, box-shadow 0.15s, transform 0.1s;
     white-space: nowrap;
   }
@@ -121,19 +129,23 @@
     animation: floatIn 0.25s ease-out forwards;
   }
   @keyframes floatIn {
-    from { opacity: 0; transform: translateY(8px); }
-    to   { opacity: 1; transform: translateY(0);   }
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0);    }
   }
   #resumeBtn {
-    bottom: 110px;
-    background: var(--warm-white); border: 1.5px solid var(--orange); color: var(--orange);
+    bottom: 118px;
+    background: var(--warm-white);
+    border: 2px solid var(--orange);
+    color: var(--orange);
   }
-  #resumeBtn:hover { background: var(--orange-pale); transform: translateY(-1px); }
+  #resumeBtn:hover { background: var(--orange-pale); transform: translateY(-2px); box-shadow: 0 5px 18px rgba(43,91,168,0.26); }
   #surveyFloatBtn {
-    bottom: 66px;
-    background: var(--orange); border: none; color: #FFF8F0;
+    bottom: 70px;
+    background: var(--orange);
+    border: none;
+    color: #FFF8F0;
   }
-  #surveyFloatBtn:hover { background: var(--orange-hover); transform: translateY(-1px); }
+  #surveyFloatBtn:hover { background: var(--orange-hover); transform: translateY(-2px); box-shadow: 0 5px 18px rgba(43,91,168,0.30); }
 
   /* ── Modal encuesta ── */
   .modal-overlay {
@@ -188,8 +200,8 @@
     .suggestions { gap: 6px; }
     .chip { font-size: 11px; padding: 5px 10px; }
     .toast { bottom: 80px; font-size: 12px; }
-    #resumeBtn { bottom: 100px; right: 10px; }
-    #surveyFloatBtn { bottom: 58px; right: 10px; }
+    #resumeBtn { bottom: 108px; right: 10px; font-size: 12px; padding: 9px 14px; }
+    #surveyFloatBtn { bottom: 62px; right: 10px; font-size: 12px; padding: 9px 14px; }
   }
 </style>
 </head>
@@ -548,14 +560,10 @@ async function submitSurvey() {
 function updateResumeBtn() {
   const showResume = messageCount >= RESUME_THRESHOLD && !isLoading;
   const showSurvey = messageCount >= SURVEY_THRESHOLD && !surveyShown && !isLoading;
-  // Si se muestran ambos, alternar: encuesta tiene prioridad, resumen se oculta mientras encuesta está visible
-  if (showSurvey) {
-    $('surveyFloatBtn').classList.add('visible');
-    $('resumeBtn').classList.remove('visible');
-  } else {
-    $('surveyFloatBtn').classList.remove('visible');
-    $('resumeBtn').classList.toggle('visible', showResume);
-  }
+  // Ambos independientes — resumen siempre visible si hay suficientes mensajes,
+  // encuesta aparece una sola vez por sesión
+  $('resumeBtn').classList.toggle('visible', showResume);
+  if (showSurvey) $('surveyFloatBtn').classList.add('visible');
 }
 
 async function triggerResumen() {
