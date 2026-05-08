@@ -357,7 +357,6 @@ const CLIENT_TMOUT  = 33000;
 const HISTORY_LIMIT = 16;
 const RESUME_THRESHOLD = 4; // mensajes mínimos para mostrar botón resumen
 const SURVEY_THRESHOLD  = 5; // mensajes para mostrar botón encuesta flotante
-const APPS__URL   = 'https://script.google.com/macros/s/AKfycbxSbuDSkNdY0-SckcAeGc2fYlSY6_mXazlhvJ8LPzg-P32X-7ovKhPuV-yagz8-bq01eA/exec'; // URL del Apps Script de métricas
 
 // ── State ───────────────────────────────────────────────────────
 let history      = [];
@@ -538,11 +537,11 @@ async function submitSurvey() {
   const btn = $('surveySubmitBtn');
   btn.disabled = true; btn.textContent = 'Enviando…';
   try {
-    await fetch(APPS_SCRIPT_URL, {
+    await fetch(WORKER_URL, {
       method: 'POST',
-      redirect: 'follow',
-      headers: { 'Content-Type': 'text/plain' }, // text/plain evita CORS preflight en Apps Script
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        _survey:    true,
         tipo:       'encuesta',
         timestamp:  new Date().toISOString(),
         session_id: SESSION_ID,
@@ -596,10 +595,11 @@ function makeDownloadBtn(content, label='⬇️ Descargar Word', cls='download')
       setTimeout(()=>{b.innerHTML=label;b.disabled=false;},3000);
       // Registrar descarga en métricas
       try {
-        fetch(APPS_SCRIPT_URL, {
-          method:'POST', redirect:'follow',
-          headers:{'Content-Type':'text/plain'},
+        fetch(WORKER_URL, {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
           body: JSON.stringify({
+            _survey:false,
             tipo:'evento', timestamp:new Date().toISOString(),
             session_id:SESSION_ID, municipio:sessionPin||'demo',
             flow:activeFlow, chip_usado:sessionChip||'',
