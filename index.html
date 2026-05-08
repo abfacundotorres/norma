@@ -106,19 +106,34 @@
   .toast { position: fixed; bottom: 88px; left: 50%; transform: translateX(-50%) translateY(8px); background: var(--brown-dark); color: #FFF8F0; padding: 8px 18px; border-radius: 20px; font-size: 13px; opacity: 0; transition: opacity 0.25s, transform 0.25s; pointer-events: none; z-index: 100; white-space: nowrap; max-width: 90vw; text-align: center; }
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
-  /* ── Botón resumen flotante ── */
-  #resumeBtn {
-    position: fixed; bottom: 90px; right: 16px; z-index: 50;
-    background: var(--warm-white); border: 1.5px solid var(--border);
-    border-radius: 20px; padding: 7px 13px; font-size: 12px;
-    color: var(--brown-mid); cursor: pointer; display: none;
-    font-family: 'DM Sans', system-ui, sans-serif;
-    box-shadow: 0 2px 10px rgba(43,91,168,0.12);
-    transition: background 0.15s, border-color 0.15s;
-    align-items: center; gap: 5px;
+  /* ── Botones flotantes toast (resumen + encuesta) ── */
+  .float-toast {
+    position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%) translateY(12px);
+    z-index: 50; display: none; align-items: center; justify-content: center; gap: 8px;
+    padding: 13px 26px; border-radius: 28px; font-size: 14px; font-weight: 600;
+    font-family: 'DM Sans', system-ui, sans-serif; cursor: pointer; border: none;
+    box-shadow: 0 4px 20px rgba(43,91,168,0.22);
+    transition: background 0.15s, transform 0.15s, box-shadow 0.15s;
+    white-space: nowrap; max-width: 88vw;
   }
-  #resumeBtn:hover { background: var(--orange-pale); border-color: var(--orange); }
-  #resumeBtn.visible { display: flex; }
+  .float-toast.visible {
+    display: flex;
+    animation: toastUp 0.3s ease-out forwards;
+  }
+  @keyframes toastUp {
+    from { opacity: 0; transform: translateX(-50%) translateY(20px); }
+    to   { opacity: 1; transform: translateX(-50%) translateY(0);    }
+  }
+  #resumeBtn {
+    background: var(--warm-white); border: 2px solid var(--orange);
+    color: var(--orange);
+  }
+  #resumeBtn:hover { background: var(--orange-pale); box-shadow: 0 6px 24px rgba(43,91,168,0.28); transform: translateX(-50%) translateY(-2px); }
+  #surveyFloatBtn {
+    background: var(--orange); color: #FFF8F0;
+    bottom: 90px;
+  }
+  #surveyFloatBtn:hover { background: var(--orange-hover); box-shadow: 0 6px 24px rgba(43,91,168,0.32); transform: translateX(-50%) translateY(-2px); }
 
   /* ── Modal encuesta ── */
   .modal-overlay {
@@ -161,21 +176,6 @@
   .modal-thanks p { font-size: 13px; color: var(--brown-light); line-height: 1.5; }
 
 
-  /* ── Botón encuesta flotante ── */
-  #surveyFloatBtn {
-    position: fixed; bottom: 130px; right: 16px; z-index: 50;
-    background: var(--orange); border: none;
-    border-radius: 20px; padding: 8px 14px; font-size: 12px;
-    color: #FFF8F0; cursor: pointer; display: none;
-    font-family: 'DM Sans', system-ui, sans-serif;
-    box-shadow: 0 2px 12px rgba(43,91,168,0.25);
-    transition: background 0.15s, transform 0.15s;
-    align-items: center; gap: 6px; font-weight: 500;
-    animation: slideInRight 0.3s ease-out;
-  }
-  #surveyFloatBtn:hover { background: var(--orange-hover); transform: scale(1.03); }
-  #surveyFloatBtn.visible { display: flex; }
-  @keyframes slideInRight { from { opacity:0; transform:translateX(20px); } to { opacity:1; transform:translateX(0); } }
 
   @media (max-width: 480px) {
     .page { padding: 8px 8px 0; }
@@ -188,8 +188,7 @@
     .suggestions { gap: 6px; }
     .chip { font-size: 11px; padding: 5px 10px; }
     .toast { bottom: 80px; font-size: 12px; }
-    #resumeBtn { bottom: 80px; right: 12px; }
-    #surveyFloatBtn { bottom: 120px; right: 12px; }
+    .float-toast { bottom: 80px; font-size: 13px; padding: 11px 20px; }
   }
 </style>
 </head>
@@ -198,12 +197,12 @@
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <!-- Botón encuesta flotante -->
-<button id="surveyFloatBtn" onclick="openModal('')" title="¿Te fue útil Norma hoy?">
+<button id="surveyFloatBtn" class="float-toast" onclick="openModal('')" title="¿Te fue útil Norma hoy?">
   ⭐ ¿Te fue útil?
 </button>
 
 <!-- Botón resumen flotante -->
-<button id="resumeBtn" title="Generar resumen de esta consulta" onclick="triggerResumen()">
+<button id="resumeBtn" class="float-toast" title="Generar resumen de esta consulta" onclick="triggerResumen()">
   📋 Resumen
 </button>
 
@@ -331,6 +330,9 @@
 <script>
 // ── Config ──────────────────────────────────────────────────────
 const WORKER_URL    = 'https://norma-aulaclara.abfacundotorres.workers.dev';
+
+// Session ID anónimo — consolida todos los eventos de una misma sesión
+const SESSION_ID = Math.random().toString(36).slice(2,10) + Date.now().toString(36);
 const METRICS_URL   = 'https://norma-aulaclara.abfacundotorres.workers.dev'; // mismo endpoint — el Apps Script se encarga
 const MAX_CHARS     = 2000;
 const MAX_RETRY     = 2;
@@ -523,6 +525,7 @@ async function submitSurvey() {
       body: JSON.stringify({
         tipo:       'encuesta',
         timestamp:  new Date().toISOString(),
+        session_id: SESSION_ID,
         municipio:  sessionPin  || 'demo',
         flow:       activeFlow,
         chip_usado: sessionChip || '',
@@ -542,10 +545,15 @@ async function submitSurvey() {
 
 // ── Botón resumen ───────────────────────────────────────────────
 function updateResumeBtn() {
-  $('resumeBtn').classList.toggle('visible', messageCount >= RESUME_THRESHOLD && !isLoading);
-  // Mostrar botón encuesta flotante a los 5 mensajes, una sola vez por sesión
-  if (messageCount >= SURVEY_THRESHOLD && !surveyShown && !isLoading) {
+  const showResume = messageCount >= RESUME_THRESHOLD && !isLoading;
+  const showSurvey = messageCount >= SURVEY_THRESHOLD && !surveyShown && !isLoading;
+  // Si se muestran ambos, alternar: encuesta tiene prioridad, resumen se oculta mientras encuesta está visible
+  if (showSurvey) {
     $('surveyFloatBtn').classList.add('visible');
+    $('resumeBtn').classList.remove('visible');
+  } else {
+    $('surveyFloatBtn').classList.remove('visible');
+    $('resumeBtn').classList.toggle('visible', showResume);
   }
 }
 
@@ -633,7 +641,7 @@ async function fetchMsg(message, attempt=0) {
   try {
     const res=await fetch(WORKER_URL,{
       method:'POST', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({message,history:historyPayload(),pin:sessionPin,flow:activeFlow,ctx:directivoCtx,chip_usado:sessionChip}),
+      body:JSON.stringify({message,history:historyPayload(),pin:sessionPin,flow:activeFlow,ctx:directivoCtx,chip_usado:sessionChip,session_id:SESSION_ID}),
       signal:ctrl.signal,
     });
     clearTimeout(tmout);
