@@ -29,6 +29,11 @@
     --border: #C5D5EF; --green: #3A7D2C; --green-pale: #EAF3DE; --red: #B91C1C; --red-pale: #FEE2E2;
   }
   html, body { height: 100%; background: var(--cream); font-family: 'DM Sans', system-ui, sans-serif; color: var(--brown-dark); overflow: hidden; -webkit-font-smoothing: antialiased; }
+  /* Mobile: usar altura dinámica para acomodar el teclado virtual */
+  @supports (height: 100dvh) {
+    html, body { height: 100dvh; }
+    .page { height: 100dvh; }
+  }
   body::before { content: ''; position: fixed; inset: 0; background-image: radial-gradient(circle at 20% 20%, rgba(232,160,32,0.08) 0%, transparent 50%), radial-gradient(circle at 80% 80%, rgba(217,95,26,0.07) 0%, transparent 50%); pointer-events: none; z-index: 0; }
   .page { position: relative; z-index: 1; height: 100vh; display: flex; flex-direction: column; max-width: 680px; margin: 0 auto; padding: 14px 14px 0; }
   .header { display: flex; align-items: center; gap: 12px; padding: 12px 18px; background: var(--warm-white); border: 1px solid var(--border); border-radius: 20px; margin-bottom: 10px; flex-shrink: 0; }
@@ -135,14 +140,14 @@
     to   { opacity: 1; transform: translateX(calc(min(340px, 50vw) - 100% - 14px)) translateY(0);    }
   }
   #resumeBtn {
-    bottom: 122px;
+    bottom: 158px;
     background: var(--warm-white);
     border: 2px solid var(--orange);
     color: var(--orange);
   }
   #resumeBtn:hover { background: var(--orange-pale); box-shadow: 0 5px 20px rgba(43,91,168,0.28); }
   #surveyFloatBtn {
-    bottom: 72px;
+    bottom: 108px;
     background: var(--orange);
     border: none;
     color: #FFF8F0;
@@ -707,15 +712,20 @@ async function sendMessage(text) {
   $('typingRow').classList.add('visible');
   msg.scrollTop=msg.scrollHeight;
   let loadTimer=null;
-  if(activeFlow==='actas') loadTimer=setTimeout(()=>showToast('Norma está armando el acta…',15000),2500);
-  else if(activeFlow==='proyectos') loadTimer=setTimeout(()=>showToast('Norma está armando el proyecto…',15000),2500);
-  else if(activeFlow==='comunicados') loadTimer=setTimeout(()=>showToast('Norma está redactando el comunicado…',15000),2500);
-  else if(activeFlow==='licencias') loadTimer=setTimeout(()=>showToast('Norma está consultando la normativa…',15000),2500);
-  else if(activeFlow==='resumen') loadTimer=setTimeout(()=>showToast('Norma está generando el resumen…',15000),2500);
+  // Solo mostrar toast de carga si la respuesta tarda más de 6 segundos
+  const loadMsgs = {
+    actas:       'Armando el acta…',
+    proyectos:   'Armando el proyecto…',
+    comunicados: 'Redactando el comunicado…',
+    licencias:   'Consultando la normativa…',
+    resumen:     'Generando el resumen…',
+  };
+  if(loadMsgs[activeFlow]) loadTimer=setTimeout(()=>showToast(loadMsgs[activeFlow],8000),6000);
   const pending={role:'user',parts:[{text}]};
   try {
     const reply=await fetchMsg(text);
     $('typingRow').classList.remove('visible');
+    $('toast').classList.remove('show'); // limpiar toast de carga al recibir respuesta
     appendMessage(reply,'bot');
     history.push(pending); history.push({role:'model',parts:[{text:reply}]});
     if(history.length>HISTORY_LIMIT*2) history=history.slice(-HISTORY_LIMIT*2);
@@ -780,7 +790,22 @@ $('surveyModal').addEventListener('click',e=>{if(e.target===$('surveyModal'))clo
 btn.addEventListener('click',handleSend);
 inp.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();handleSend();}});
 inp.addEventListener('input',()=>{autoResize();updateChar();});
-inp.addEventListener('focus',()=>{document.querySelector('meta[name=viewport]').setAttribute('content','width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no');});
+inp.addEventListener('focus',()=>{
+  document.querySelector('meta[name=viewport]').setAttribute('content','width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no');
+  // Mobile: ocultar header cuando aparece el teclado para ganar espacio
+  if(window.innerWidth<=480){
+    setTimeout(()=>{
+      const h=document.querySelector('.header');
+      if(h)h.style.display='none';
+      msg.scrollTop=msg.scrollHeight;
+    },300);
+  }
+});
+inp.addEventListener('blur',()=>{
+  // Restaurar header al cerrar el teclado
+  const h=document.querySelector('.header');
+  if(h)h.style.display='';
+});
 window.addEventListener('online',()=>setStatus(true));
 window.addEventListener('offline',()=>setStatus(false));
 setStatus(navigator.onLine);
