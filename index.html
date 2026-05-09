@@ -158,9 +158,12 @@
   .modal-overlay {
     position: fixed; inset: 0; z-index: 300;
     background: rgba(15,32,68,0.45); backdrop-filter: blur(2px);
-    display: flex; align-items: center; justify-content: center;
-    padding: 20px; opacity: 0; pointer-events: none;
+    display: flex; align-items: flex-end; justify-content: center;
+    padding: 20px 20px 32px; opacity: 0; pointer-events: none;
     transition: opacity 0.2s;
+  }
+  @media (min-height: 600px) {
+    .modal-overlay { align-items: center; padding: 20px; }
   }
   .modal-overlay.visible { opacity: 1; pointer-events: all; }
   .modal-card {
@@ -190,6 +193,15 @@
   .modal-btn.primary:disabled { opacity: 0.5; cursor: not-allowed; }
   .modal-btn.secondary { background: transparent; color: var(--brown-light); border: 1.5px solid var(--border); }
   .modal-btn.secondary:hover { background: var(--orange-pale); }
+  .uso-btns { display: flex; gap: 6px; margin-bottom: 20px; }
+  .uso-btn {
+    flex: 1; padding: 8px 4px; border-radius: 10px; font-size: 11px; font-weight: 500;
+    cursor: pointer; font-family: 'DM Sans', system-ui, sans-serif;
+    border: 1.5px solid var(--border); background: var(--cream);
+    color: var(--brown-dark); transition: all 0.15s; line-height: 1.4;
+  }
+  .uso-btn.active { background: var(--orange); color: #FFF8F0; border-color: var(--orange); }
+  .uso-btn:hover:not(.active) { background: var(--orange-pale); border-color: var(--orange); }
   .modal-thanks { display: none; padding: 16px 0 4px; }
   .modal-thanks-icon { font-size: 36px; margin-bottom: 8px; }
   .modal-thanks p { font-size: 13px; color: var(--brown-light); line-height: 1.5; }
@@ -232,7 +244,7 @@
   <div class="modal-card">
     <div id="surveyForm">
       <div class="modal-title">¿Te fue útil? 🗂️</div>
-      <div class="modal-sub">Solo 2 preguntas — menos de 10 segundos</div>
+      <div class="modal-sub">3 preguntas — menos de 15 segundos</div>
       <div class="stars" id="starsRow" role="group" aria-label="Utilidad del 1 al 5">
         <span class="star" data-v="1" onclick="setStar(1)" role="button" aria-label="1 estrella">⭐</span>
         <span class="star" data-v="2" onclick="setStar(2)" role="button" aria-label="2 estrellas">⭐</span>
@@ -247,6 +259,12 @@
         <option value="60">1 hora</option>
         <option value="120">Más de 2 horas</option>
       </select>
+      <div class="modal-label">¿Pudiste usar lo que te generé?</div>
+      <div class="uso-btns" id="usoBtns">
+        <button class="uso-btn" data-v="si" onclick="setUso('si')">✅ Sí, directo</button>
+        <button class="uso-btn" data-v="parcial" onclick="setUso('parcial')">🔧 Lo adapté</button>
+        <button class="uso-btn" data-v="no" onclick="setUso('no')">❌ No me sirvió</button>
+      </div>
       <div class="modal-actions">
         <button class="modal-btn secondary" onclick="closeModal()">Omitir</button>
         <button class="modal-btn primary" id="surveySubmitBtn" onclick="submitSurvey()" disabled>Enviar</button>
@@ -371,6 +389,7 @@ let sessionPin   = null;
 let activeFlow   = 'general';
 let directivoCtx = { nombre: '', cargo: '' };
 let surveyRating = 0;
+let surveyUso = '';
 let lastDocTitle = '';
 let messageCount = 0;
 let surveyShown   = false;
@@ -516,11 +535,17 @@ function setStar(n) {
   $('surveySubmitBtn').disabled = false;
 }
 
+function setUso(v) {
+  surveyUso = v;
+  document.querySelectorAll('.uso-btn').forEach(b => b.classList.toggle('active', b.dataset.v === v));
+}
+
 function openModal(docTitle) {
   lastDocTitle = docTitle || '';
   $('surveyFloatBtn').classList.remove('visible');
-  surveyRating = 0;
+  surveyRating = 0; surveyUso = '';
   document.querySelectorAll('.star').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.uso-btn').forEach(b => b.classList.remove('active'));
   $('surveySubmitBtn').disabled = true;
   $('surveyForm').style.display = 'block';
   $('surveyThanks').style.display = 'none';
@@ -552,10 +577,11 @@ async function submitSurvey() {
         session_id: SESSION_ID,
         municipio:  sessionPin  || 'demo',
         flow:       activeFlow,
-        chip_usado: sessionChip || '',
+        chip_usado: sessionChip || activeFlow,
         documento:  lastDocTitle,
         utilidad:   surveyRating,
         tiempo:     $('surveyTiempo').value,
+        uso:        surveyUso,
       }),
     });
   } catch { /* silencioso */ }
