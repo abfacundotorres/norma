@@ -331,6 +331,14 @@
   .d-pill-g { background:rgba(90,158,64,0.15); color:#7DC45E; border:1px solid rgba(90,158,64,0.25); }
   .d-pill-a { background:rgba(232,168,48,0.15); color:#F5C862; border:1px solid rgba(232,168,48,0.25); }
   .d-pill-r { background:rgba(185,28,28,0.15); color:#FCA5A5; border:1px solid rgba(185,28,28,0.25); }
+
+  /* v12: selector de escuela */
+  .d-filter-bar { display:flex; align-items:center; gap:10px; margin:0 0 14px 0; flex-wrap:wrap; }
+  .d-filter-lbl { font-size:11px; text-transform:uppercase; letter-spacing:0.08em; color:rgba(245,236,216,0.45); font-family:'DM Sans',sans-serif; }
+  .d-select { background:#1E1915; color:#F5ECD8; border:1px solid rgba(237,213,176,0.18); border-radius:8px; padding:8px 12px; font-family:'DM Sans',sans-serif; font-size:13px; cursor:pointer; min-width:260px; }
+  .d-select:focus { outline:none; border-color:#E06820; }
+  .d-filter-count { font-size:11px; color:rgba(245,236,216,0.45); font-family:'DM Mono',monospace; }
+  .d-col-escuela { font-size:10px; color:rgba(245,236,216,0.45); max-width:180px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   .d-empty { text-align:center; padding:32px 16px; }
   .d-empty-icon { font-size:30px; margin-bottom:8px; opacity:0.3; }
   .d-empty-text { font-size:11px; color:rgba(245,236,216,0.35); }
@@ -358,6 +366,8 @@
     .d-table thead th { padding:6px 8px; font-size:9px; }
     .d-table tbody td { padding:8px 8px; }
     .d-col-tiempo { display:none; }
+    .d-col-escuela { display:none; }
+    .d-select { min-width:0; width:100%; }
     .d-tl-bars { height:56px; }
   }
   @media (max-width:380px) {
@@ -398,7 +408,7 @@
         <div class="d-logo-badge">📊</div>
         <div>
           <h1>Panel de uso · Norma</h1>
-          <p>Aula Clara — Municipio de Jesús María</p>
+          <p id="dSubtitle">Aula Clara</p>
         </div>
       </div>
       <div class="d-top-right">
@@ -411,6 +421,15 @@
     </div>
 
     <div class="d-err" id="dErr"></div>
+
+    <!-- v12: filtro por escuela -->
+    <div class="d-filter-bar">
+      <span class="d-filter-lbl">Escuela:</span>
+      <select class="d-select" id="dSchoolFilter" onchange="dApplyFilter()">
+        <option value="">Todas las escuelas</option>
+      </select>
+      <span class="d-filter-count" id="dFilterCount"></span>
+    </div>
 
     <div class="d-kpi-grid">
       <div class="d-kpi" style="--da:#E06820"><div class="d-kpi-icon">📋</div><div class="d-kpi-label">Encuestas completadas</div><div class="d-kpi-val" id="dKpiTotal">—</div><div class="d-kpi-sub" id="dKpiTotalSub">Sin datos</div></div>
@@ -427,12 +446,17 @@
       <div class="d-card"><div class="d-card-title">Satisfacción directivos</div><div class="d-stars" id="dStars"><div class="d-empty"><div class="d-empty-icon">⭐</div><div class="d-empty-text">Sin datos</div></div></div></div>
       <div class="d-card"><div class="d-card-title">Actividad últimos 14 días</div><div class="d-tl-bars" id="dTlBars"></div><div class="d-tl-labels" id="dTlLabels"></div></div>
     </div>
+    <!-- v12: ranking por escuela -->
+    <div class="d-card" style="margin-top:14px;">
+      <div class="d-card-title">Uso por escuela</div>
+      <div class="d-bar-list" id="dSchools"><div class="d-empty"><div class="d-empty-icon">🏫</div><div class="d-empty-text">Sin datos</div></div></div>
+    </div>
     <div class="d-card" style="margin-top:14px;">
       <div class="d-card-title">Últimas 20 respuestas</div>
       <div class="d-table-wrap">
         <table class="d-table">
-          <thead><tr><th>Fecha</th><th>Herramienta</th><th>Utilidad</th><th class="d-col-tiempo">Tiempo</th><th>Resultado</th></tr></thead>
-          <tbody id="dTableBody"><tr><td colspan="5" style="text-align:center;padding:28px;color:rgba(245,236,216,0.3)">Cargando…</td></tr></tbody>
+          <thead><tr><th>Fecha</th><th class="d-col-escuela">Escuela</th><th>Herramienta</th><th>Utilidad</th><th class="d-col-tiempo">Tiempo</th><th>Resultado</th></tr></thead>
+          <tbody id="dTableBody"><tr><td colspan="6" style="text-align:center;padding:28px;color:rgba(245,236,216,0.3)">Cargando…</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -514,7 +538,7 @@
     </div>
     <div class="header-text">
       <div class="header-name">Norma</div>
-      <div class="header-sub" id="headerSub">Asistente de gestión · Directivos · Primaria Córdoba</div>
+      <div class="header-sub">Asistente de gestión · Directivos · Primaria Córdoba</div>
     </div>
     <div class="status-badge online" id="statusBadge">
       <div class="status-dot"></div>
@@ -1037,11 +1061,6 @@ async function submitPin() {
       showDashboard();
     } else {
       sessionPin=pin;
-      // v7.3: si el worker devuelve la escuela mapeada, mostrarla en el header
-      if (data.escuela) {
-        const hs = $('headerSub');
-        if (hs) hs.textContent = data.escuela;
-      }
       $('pinScreen').style.display='none';
       $('mainPage').style.display='flex';
       showOnboarding();
@@ -1183,7 +1202,11 @@ async function dLoadData() {
       throw new Error(data.error||'Error del servidor (HTTP '+res.status+')');
     }
     const rows=Array.isArray(data.rows)?data.rows:[];
-    dRenderAll(rows,data);
+    // v12: cache de rows + populate del selector de escuelas
+    dState.allRows = rows;
+    dState.data = data;
+    dPopulateSchoolFilter(rows);
+    dRenderAll(dFilteredRows(), data);
     $('dLastUpdate').textContent='Act. '+new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
   } catch(e) {
     const m=e.message==='Failed to fetch'
@@ -1196,12 +1219,69 @@ async function dLoadData() {
   }
 }
 
+// v12: estado del dashboard (rows crudas + selección actual)
+const dState = { allRows: [], data: {}, selectedSchool: '' };
+
+function dFilteredRows() {
+  const sel = dState.selectedSchool;
+  if (!sel) return dState.allRows;
+  return dState.allRows.filter(r => String(r[10]||'') === sel);
+}
+
+function dPopulateSchoolFilter(rows) {
+  const sel = $('dSchoolFilter');
+  // Conservar selección actual si la escuela sigue existiendo
+  const prev = dState.selectedSchool;
+  const escuelas = new Set();
+  let municipio = '';
+  rows.forEach(r => {
+    const e = String(r[10]||'').trim();
+    if (e) escuelas.add(e);
+    if (!municipio && r[2]) municipio = String(r[2]);
+  });
+  const sorted = Array.from(escuelas).sort();
+  const total = rows.length;
+  sel.innerHTML = `<option value="">Todas las escuelas (${total})</option>` +
+    sorted.map(e => {
+      const n = rows.filter(r => String(r[10]||'') === e).length;
+      return `<option value="${dEsc(e)}">${dEsc(e)} (${n})</option>`;
+    }).join('');
+  if (prev && escuelas.has(prev)) {
+    sel.value = prev;
+  } else {
+    dState.selectedSchool = '';
+  }
+  // v12: subtítulo con el municipio más frecuente (no-demo si lo hay)
+  const muniCounts = {};
+  rows.forEach(r => { const m = String(r[2]||'').trim(); if (m) muniCounts[m] = (muniCounts[m]||0) + 1; });
+  const muniSorted = Object.entries(muniCounts).sort((a,b) => b[1] - a[1]);
+  const muniReal = muniSorted.find(([m]) => m !== 'demo')?.[0] || muniSorted[0]?.[0] || '';
+  // Mapping de slugs a nombre legible (extensible si sumás municipios)
+  const muniLabels = { 'jesusmaria': 'Jesús María', 'colonia caroya': 'Colonia Caroya', 'demo': 'Demo' };
+  const muniDisplay = muniLabels[muniReal.toLowerCase()] || (muniReal && muniReal.charAt(0).toUpperCase() + muniReal.slice(1));
+  const sub = $('dSubtitle');
+  if (sub) {
+    sub.textContent = 'Aula Clara' + (muniDisplay ? ' — Municipio de ' + muniDisplay : '');
+  }
+}
+
+function dApplyFilter() {
+  dState.selectedSchool = $('dSchoolFilter').value || '';
+  const rows = dFilteredRows();
+  const cnt = $('dFilterCount');
+  cnt.textContent = dState.selectedSchool
+    ? `${rows.length} de ${dState.allRows.length} registros`
+    : '';
+  dRenderAll(rows, dState.data);
+}
+
 function dRenderAll(rows,data) {
   dRenderKPI(rows,data);
   dRenderChips(rows);
   dRenderUso(rows);
   dRenderStars(rows);
   dRenderTimeline(rows);
+  dRenderSchools(rows);  // v12
   dRenderTable(rows);
 }
 
@@ -1213,8 +1293,7 @@ function dRenderKPI(rows,data) {
   const avg=utils.length?(utils.reduce((a,b)=>a+b,0)/utils.length).toFixed(1):(data.utilidad_promedio||null);
   dSet('KpiUtil',avg?avg+' / 5':'—',avg?utils.length+' calificaciones':'Sin calificaciones');
 
-  const si=rows.filter(r=>String(r[7])==='Í, directo').length
-          ||rows.filter(r=>String(r[7])==='Sí, directo').length;
+  const si=rows.filter(r=>String(r[7])==='Sí, directo').length;
   const pct=total?Math.round(si/total*100):0;
   dSet('KpiSi',pct+'%',si+' de '+total+' respuestas');
 
@@ -1288,13 +1367,32 @@ function dRenderTimeline(rows) {
   $('dTlLabels').innerHTML=keys.map((k,i)=>{const p=k.split('/'),show=(i%3===0||i===keys.length-1)?p[0]+'/'+p[1]:'';return `<div class="d-tl-lbl">${show}</div>`;}).join('');
 }
 
+// v12: ranking de escuelas por número de encuestas (mismo estilo que dRenderChips)
+function dRenderSchools(rows) {
+  const counts={};
+  rows.forEach(r=>{const e=String(r[10]||'').trim()||'(sin asignar)';counts[e]=(counts[e]||0)+1;});
+  const sorted=Object.entries(counts).sort((a,b)=>b[1]-a[1]);
+  const max=sorted[0]?.[1]||1;
+  const el=$('dSchools');
+  if(!sorted.length){el.innerHTML=dEmpty('🏫');return;}
+  // Paleta distinta a chips para diferenciar visualmente
+  const colors=['#4E9BB5','#7B6FD4','#5A9E40','#E8A830','#D46F7B','#E06820','#8FB55A','#F28C4E'];
+  el.innerHTML=sorted.map(([lbl,n],i)=>`
+    <div class="d-bar-row">
+      <div class="d-bar-lbl" title="${dEsc(lbl)}">${dEsc(lbl)}</div>
+      <div class="d-bar-track"><div class="d-bar-fill" style="width:${Math.round(n/max*100)}%;background:${colors[i%colors.length]}"></div></div>
+      <div class="d-bar-n">${n}</div>
+    </div>`).join('');
+}
+
 function dRenderTable(rows) {
   const tbody=$('dTableBody');
   const recent=rows.slice(-20).reverse();
-  if(!recent.length){tbody.innerHTML=`<tr><td colspan="5" style="text-align:center;padding:28px;color:rgba(245,236,216,0.3)">Sin registros aún</td></tr>`;return;}
+  if(!recent.length){tbody.innerHTML=`<tr><td colspan="6" style="text-align:center;padding:28px;color:rgba(245,236,216,0.3)">Sin registros aún</td></tr>`;return;}
   const pilCls={'Sí, directo':'d-pill-g','Lo adapté':'d-pill-a','No me sirvió':'d-pill-r'};
   tbody.innerHTML=recent.map(r=>`<tr>
     <td>${dEsc(String(r[0]||''))} ${dEsc(String(r[1]||''))}</td>
+    <td class="d-col-escuela" title="${dEsc(String(r[10]||''))}">${dEsc(String(r[10]||'—'))}</td>
     <td>${dEsc(String(r[3]||'—'))}</td>
     <td>${r[5]?'★'.repeat(Math.min(5,Number(r[5]))):'—'}</td>
     <td class="d-col-tiempo">${dEsc(String(r[6]||'—'))}</td>
