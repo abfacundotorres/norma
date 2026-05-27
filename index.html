@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="description" content="Norma — Asistente de gestión institucional para directivos de primaria en Córdoba">
 <meta name="theme-color" content="#2B5BA8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src https://i.imgur.com data:; connect-src https://norma-aulaclara.abfacundotorres.workers.dev https://api.groq.com https://script.google.com;">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src https://i.imgur.com data:; connect-src https://norma-aulaclara.abfacundotorres.workers.dev;">
 <title>Norma — Asistente de Gestión Institucional</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+CiAgPHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iNyIgZmlsbD0iIzJCNUJBOCIvPgogIDx0ZXh0IHg9IjE2IiB5PSIyMiIgZm9udC1mYW1pbHk9Ikdlb3JnaWEsc2VyaWYiIGZvbnQtd2VpZ2h0PSJib2xkIiBmb250LXNpemU9IjE4IiBmaWxsPSJ3aGl0ZSIgdGV4dC1hbmNob3I9Im1pZGRsZSI+TjwvdGV4dD4KPC9zdmc+">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -538,7 +538,7 @@
     </div>
     <div class="header-text">
       <div class="header-name">Norma</div>
-      <div class="header-sub">Asistente de gestión · Directivos · Primaria Córdoba</div>
+      <div class="header-sub" id="headerSub">Asistente de gestión · Directivos · Primaria Córdoba</div>
     </div>
     <div class="status-badge online" id="statusBadge">
       <div class="status-dot"></div>
@@ -623,6 +623,7 @@ let history      = [];
 let isLoading    = false;
 let toastTimer   = null;
 let sessionPin   = null;
+let sessionSchool = '';  // v12.2: nombre de escuela (devuelto por _ping)
 let dashboardPin = '';
 let activeFlow   = 'general';
 let directivoCtx = { nombre: '', cargo: '' };
@@ -632,6 +633,10 @@ let lastDocTitle = '';
 let messageCount = 0;
 let surveyShown   = false;
 let sessionChip   = '';  // chip que usó el usuario para iniciar
+
+// v12.2: clave de localStorage para persistir directivoCtx por sessionPin.
+// Cada PIN tiene su propio nombre/cargo guardado, así no se mezclan entre directivos.
+const DIRECTIVO_STORAGE_KEY = (pin) => `norma_directivo_${pin}`;
 
 // ── DOM refs ────────────────────────────────────────────────────
 const $   = id => document.getElementById(id);
@@ -645,10 +650,32 @@ function isDoc(t) {
 }
 
 function extractDirectivoCtx(text) {
-  const nameMatch = text.match(/(?:me llamo|mi nombre es)\s+([A-ZÁÉÍÓÚÜÑ][a-záéíóúüñ]{2,}(?:\s+[A-ZÁÉÍÓÚÜÑ][a-záéíóúüñ]{2,})?)/i);
-  if (nameMatch) directivoCtx.nombre = nameMatch[1].trim();
-  if (/directora?/i.test(text) && !directivoCtx.cargo) directivoCtx.cargo = 'Directora/Director';
-  if (/vicedirectora?/i.test(text) && !directivoCtx.cargo) directivoCtx.cargo = 'Vicedirector/a';
+  // v12.2 (Q1): regex más permisivo
+  //   - Acepta minúsculas (la gente escribe "me llamo maría")
+  //   - Soporta hasta 4 palabras en el nombre ("María del Carmen López")
+  //   - Detecta vicedirector/a y secretario/a además de director/a
+  let dirty = false;
+  const nameMatch = text.match(/(?:me llamo|mi nombre es|soy)\s+([a-záéíóúüñ][a-záéíóúüñ\s]{2,60}?)(?=[.,;\n]|$|\s+(?:y\s|directora?|vicedirec|secret))/i);
+  if (nameMatch && !directivoCtx.nombre) {
+    // Capitalizar cada palabra
+    const raw = nameMatch[1].trim().replace(/\s+/g,' ').slice(0,60);
+    const capitalized = raw.split(' ').slice(0,4).map(w =>
+      w.length > 2 ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : w.toLowerCase()
+    ).join(' ');
+    directivoCtx.nombre = capitalized;
+    dirty = true;
+  }
+  if (!directivoCtx.cargo) {
+    if (/vicedirectora?/i.test(text))   { directivoCtx.cargo = 'Vicedirectora/Vicedirector'; dirty = true; }
+    else if (/directora?/i.test(text))  { directivoCtx.cargo = 'Directora/Director';         dirty = true; }
+    else if (/secretari[ao]/i.test(text)){ directivoCtx.cargo = 'Secretaria/Secretario';      dirty = true; }
+  }
+  // v12.2 (Q2): persistir en localStorage para que la próxima sesión recuerde
+  if (dirty && sessionPin) {
+    try {
+      localStorage.setItem(DIRECTIVO_STORAGE_KEY(sessionPin), JSON.stringify(directivoCtx));
+    } catch {}
+  }
 }
 
 // ── Text rendering ──────────────────────────────────────────────
@@ -813,7 +840,7 @@ async function submitSurvey() {
         tipo:       'encuesta',
         timestamp:  new Date().toISOString(),
         session_id: SESSION_ID,
-        municipio:  sessionPin  || 'demo',
+        // v12.2: municipio/escuela los resuelve el worker desde el PIN. No mandar desde acá.
         flow:       activeFlow,
         chip_usado: sessionChip || activeFlow,
         documento:  lastDocTitle,
@@ -862,22 +889,9 @@ function makeDownloadBtn(content, label='⬇️ Descargar Word', cls='download')
       await generateWord(content);
       b.innerHTML='✅ Descargado';
       setTimeout(()=>{b.innerHTML=label;b.disabled=false;},3000);
-      // Registrar descarga en métricas
-      try {
-        fetch(WORKER_URL, {
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({
-            _survey:false,
-            tipo:'evento', timestamp:new Date().toISOString(),
-            session_id:SESSION_ID, municipio:sessionPin||'demo',
-            flow:activeFlow, chip_usado:sessionChip||'',
-            doc_descargado:docTitle,
-            rag_usado:false, rag_chunks:0, rag_error:false,
-            model_used:'download',
-          }),
-        });
-      } catch {}
+      // v12.2: ya no enviamos evento de descarga separado. El AppScript v8 lo descartaba
+      // (solo procesa tipo='encuesta'), así que era código muerto. La encuesta posterior
+      // captura `documento: docTitle` y consolida la métrica.
       // Abrir encuesta después de descarga — solo si no completó
       if (!surveyShown) setTimeout(()=>openModal(docTitle), 800);
     } catch(e) {
@@ -929,7 +943,7 @@ function historyPayload() {
       const tm=text.match(/\[TITULO\]\s*([^\n]+)/);
       truncated=`[TITULO] ${tm?tm[1].trim():'documento'}`;
     } else {
-      truncated=t.role==='user'?text.slice(0,1000):text.replace(/\[TITULO\][\s\S]*$/,'').trim().slice(0,800);
+      truncated=t.role==='user'?text.slice(0,1000):text.replace(/\[TITULO\][\s\S]*$/,'').trim().slice(0,1500);
     }
     return {role:t.role,parts:[{text:truncated}]};
   });
@@ -1002,7 +1016,7 @@ async function sendMessage(text) {
   } finally {
     if(loadTimer)clearTimeout(loadTimer);
     isLoading=false; btn.disabled=inp.value.trim().length===0; setChips(false);
-    updateResumeBtn(); inp.focus();
+    updateResumeBtn(); focusInput();  // v12.2 (Q10): focusInput respeta mobile, no abre el teclado
   }
 }
 
@@ -1025,7 +1039,22 @@ function handleSend(){const text=inp.value.trim();if(!text||isLoading)return;inp
 
 function resetChat(){
   if(isLoading)return;
-  history=[]; activeFlow='general'; directivoCtx={nombre:'',cargo:''};
+  history=[]; activeFlow='general';
+  // v12.2: en lugar de borrar directivoCtx, lo recargamos del storage si existe.
+  // El usuario no debería tener que repetir su nombre/cargo en cada consulta nueva.
+  directivoCtx = { nombre: '', cargo: '' };
+  if (sessionPin) {
+    try {
+      const saved = localStorage.getItem(DIRECTIVO_STORAGE_KEY(sessionPin));
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object') {
+          directivoCtx.nombre = String(parsed.nombre || '').slice(0, 80);
+          directivoCtx.cargo  = String(parsed.cargo  || '').slice(0, 80);
+        }
+      }
+    } catch {}
+  }
   surveyShown=false; sessionChip='';
   $('surveyFloatBtn').style.display='';
   $('surveyFloatBtn').classList.remove('visible');
@@ -1061,6 +1090,23 @@ async function submitPin() {
       showDashboard();
     } else {
       sessionPin=pin;
+      // v12.2: guardar escuela devuelta por _ping y mostrarla en el header
+      sessionSchool = data.escuela || '';
+      if (sessionSchool) {
+        const sub = $('headerSub');
+        if (sub) sub.textContent = sessionSchool;
+      }
+      // v12.2: cargar directivoCtx persistido para este PIN
+      try {
+        const saved = localStorage.getItem(DIRECTIVO_STORAGE_KEY(pin));
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed && typeof parsed === 'object') {
+            directivoCtx.nombre = String(parsed.nombre || '').slice(0, 80);
+            directivoCtx.cargo  = String(parsed.cargo  || '').slice(0, 80);
+          }
+        }
+      } catch {}
       $('pinScreen').style.display='none';
       $('mainPage').style.display='flex';
       showOnboarding();
@@ -1252,12 +1298,13 @@ function dPopulateSchoolFilter(rows) {
     dState.selectedSchool = '';
   }
   // v12: subtítulo con el municipio más frecuente (no-demo si lo hay)
+  // v12.2: si SOLO hay "demo" (recién deployado, sin registros reales), no mostrar municipio
   const muniCounts = {};
   rows.forEach(r => { const m = String(r[2]||'').trim(); if (m) muniCounts[m] = (muniCounts[m]||0) + 1; });
   const muniSorted = Object.entries(muniCounts).sort((a,b) => b[1] - a[1]);
-  const muniReal = muniSorted.find(([m]) => m !== 'demo')?.[0] || muniSorted[0]?.[0] || '';
+  const muniReal = muniSorted.find(([m]) => m.toLowerCase() !== 'demo')?.[0] || '';
   // Mapping de slugs a nombre legible (extensible si sumás municipios)
-  const muniLabels = { 'jesusmaria': 'Jesús María', 'colonia caroya': 'Colonia Caroya', 'demo': 'Demo' };
+  const muniLabels = { 'jesusmaria': 'Jesús María', 'colonia caroya': 'Colonia Caroya' };
   const muniDisplay = muniLabels[muniReal.toLowerCase()] || (muniReal && muniReal.charAt(0).toUpperCase() + muniReal.slice(1));
   const sub = $('dSubtitle');
   if (sub) {
