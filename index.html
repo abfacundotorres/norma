@@ -5,8 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="description" content="Norma — Asistente de gestión institucional para directivos de primaria en Córdoba">
 <meta name="theme-color" content="#2B5BA8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src https://i.imgur.com data:; connect-src https://norma-aulaclara.abfacundotorres.workers.dev https://api.groq.com;">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src https://i.imgur.com data:; connect-src https://norma-aulaclara.abfacundotorres.workers.dev https://api.groq.com https://script.google.com;">
 <title>Norma — Asistente de Gestión Institucional</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAzMiAzMiI+CiAgPHJlY3Qgd2lkdGg9IjMyIiBoZWlnaHQ9IjMyIiByeD0iNyIgZmlsbD0iIzJCNUJBOCIvPgogIDx0ZXh0IHg9IjE2IiB5PSIyMiIgZm9udC1mYW1pbHk9Ikdlb3JnaWEsc2VyaWYiIGZvbnQtd2VpZ2h0PSJib2xkIiBmb250LXNpemU9IjE4IiBmaWxsPSJ3aGl0ZSIgdGV4dC1hbmNob3I9Im1pZGRsZSI+TjwvdGV4dD4KPC9zdmc+">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@400;600&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
@@ -28,9 +29,30 @@
     --amber-pale: #EEF3FC; --brown-dark: #0F2044; --brown-mid: #2B5BA8; --brown-light: #5B8DD9;
     --border: #C5D5EF; --green: #3A7D2C; --green-pale: #EAF3DE; --red: #B91C1C; --red-pale: #FEE2E2;
   }
-  html, body { height: 100%; background: var(--cream); font-family: 'DM Sans', system-ui, sans-serif; color: var(--brown-dark); overflow: hidden; -webkit-font-smoothing: antialiased; }
+  html { height: 100%; }
+  body { height: 100%; background: var(--cream); font-family: 'DM Sans', system-ui, sans-serif; color: var(--brown-dark); overflow: hidden; -webkit-font-smoothing: antialiased; }
   body::before { content: ''; position: fixed; inset: 0; background-image: radial-gradient(circle at 20% 20%, rgba(232,160,32,0.08) 0%, transparent 50%), radial-gradient(circle at 80% 80%, rgba(217,95,26,0.07) 0%, transparent 50%); pointer-events: none; z-index: 0; }
-  .page { position: relative; z-index: 1; height: 100vh; display: flex; flex-direction: column; max-width: 680px; margin: 0 auto; padding: 14px 14px 0; }
+
+  /* ── Layout principal ── */
+  /* Desktop: layout flex normal */
+  .page {
+    position: relative; z-index: 1;
+    height: 100vh; height: 100dvh;
+    display: flex; flex-direction: column;
+    max-width: 680px; margin: 0 auto;
+    padding: 14px 14px 0;
+  }
+
+  /* Mobile + tablet: fixed para que el teclado no empuje el header fuera de pantalla */
+  @media (max-width: 900px) {
+    .page {
+      position: fixed;
+      inset: 0;
+      height: auto;
+      max-width: 100%;
+      margin: 0;
+    }
+  }
   .header { display: flex; align-items: center; gap: 12px; padding: 12px 18px; background: var(--warm-white); border: 1px solid var(--border); border-radius: 20px; margin-bottom: 10px; flex-shrink: 0; }
   .avatar-ring { width: 54px; height: 54px; border-radius: 50%; background: var(--orange-pale); border: 2.5px solid var(--orange); display: flex; align-items: center; justify-content: center; flex-shrink: 0; overflow: hidden; font-size: 22px; }
   .avatar-ring img { width: 50px; height: 50px; object-fit: cover; }
@@ -46,7 +68,7 @@
   @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(1.3); } }
   .offline-banner { display: none; background: var(--red-pale); color: var(--red); border: 1px solid #FECACA; border-radius: 10px; padding: 8px 14px; font-size: 12px; text-align: center; margin-bottom: 8px; flex-shrink: 0; }
   .offline-banner.visible { display: block; }
-  .messages { flex: 1; overflow-y: auto; padding: 6px 2px 14px; display: flex; flex-direction: column; gap: 12px; scroll-behavior: smooth; overscroll-behavior: contain; }
+  .messages { flex: 1; min-height: 0; overflow-y: auto; padding: 6px 2px 14px; display: flex; flex-direction: column; gap: 12px; scroll-behavior: smooth; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
   .messages::-webkit-scrollbar { width: 4px; }
   .messages::-webkit-scrollbar-track { background: transparent; }
   .messages::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
@@ -106,27 +128,59 @@
   .toast { position: fixed; bottom: 88px; left: 50%; transform: translateX(-50%) translateY(8px); background: var(--brown-dark); color: #FFF8F0; padding: 8px 18px; border-radius: 20px; font-size: 13px; opacity: 0; transition: opacity 0.25s, transform 0.25s; pointer-events: none; z-index: 100; white-space: nowrap; max-width: 90vw; text-align: center; }
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
-  /* ── Botón resumen flotante ── */
-  #resumeBtn {
-    position: fixed; bottom: 90px; right: 16px; z-index: 50;
-    background: var(--warm-white); border: 1.5px solid var(--border);
-    border-radius: 20px; padding: 7px 13px; font-size: 12px;
-    color: var(--brown-mid); cursor: pointer; display: none;
+  /* ── Botones flotantes (resumen + encuesta) ── */
+  .float-toast {
+    position: fixed;
+    left: 50%;
+    z-index: 10;
+    display: none;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 22px;
+    border-radius: 24px;
+    font-size: 14px;
+    font-weight: 600;
     font-family: 'DM Sans', system-ui, sans-serif;
-    box-shadow: 0 2px 10px rgba(43,91,168,0.12);
-    transition: background 0.15s, border-color 0.15s;
-    align-items: center; gap: 5px;
+    cursor: pointer;
+    box-shadow: 0 3px 16px rgba(43,91,168,0.22);
+    transition: background 0.15s, box-shadow 0.15s, transform 0.1s;
+    white-space: nowrap;
+    /* Alineado al borde derecho del contenedor de chat (max 680px) */
+    transform: translateX(calc(min(340px, 50vw) - 100% - 14px));
   }
-  #resumeBtn:hover { background: var(--orange-pale); border-color: var(--orange); }
-  #resumeBtn.visible { display: flex; }
+  .float-toast.visible {
+    display: flex;
+    animation: floatIn 0.25s ease-out forwards;
+  }
+  @keyframes floatIn {
+    from { opacity: 0; transform: translateX(calc(min(340px, 50vw) - 100% - 14px)) translateY(10px); }
+    to   { opacity: 1; transform: translateX(calc(min(340px, 50vw) - 100% - 14px)) translateY(0);    }
+  }
+  #resumeBtn {
+    bottom: 158px;
+    background: var(--warm-white);
+    border: 2px solid var(--orange);
+    color: var(--orange);
+  }
+  #resumeBtn:hover { background: var(--orange-pale); box-shadow: 0 5px 20px rgba(43,91,168,0.28); }
+  #surveyFloatBtn {
+    bottom: 108px;
+    background: var(--orange);
+    border: none;
+    color: #FFF8F0;
+  }
+  #surveyFloatBtn:hover { background: var(--orange-hover); box-shadow: 0 5px 20px rgba(43,91,168,0.32); }
 
   /* ── Modal encuesta ── */
   .modal-overlay {
     position: fixed; inset: 0; z-index: 300;
     background: rgba(15,32,68,0.45); backdrop-filter: blur(2px);
-    display: flex; align-items: center; justify-content: center;
-    padding: 20px; opacity: 0; pointer-events: none;
+    display: flex; align-items: flex-end; justify-content: center;
+    padding: 20px 20px 32px; opacity: 0; pointer-events: none;
     transition: opacity 0.2s;
+  }
+  @media (min-height: 600px) {
+    .modal-overlay { align-items: center; padding: 20px; }
   }
   .modal-overlay.visible { opacity: 1; pointer-events: all; }
   .modal-card {
@@ -156,9 +210,20 @@
   .modal-btn.primary:disabled { opacity: 0.5; cursor: not-allowed; }
   .modal-btn.secondary { background: transparent; color: var(--brown-light); border: 1.5px solid var(--border); }
   .modal-btn.secondary:hover { background: var(--orange-pale); }
+  .uso-btns { display: flex; gap: 6px; margin-bottom: 20px; }
+  .uso-btn {
+    flex: 1; padding: 8px 4px; border-radius: 10px; font-size: 11px; font-weight: 500;
+    cursor: pointer; font-family: 'DM Sans', system-ui, sans-serif;
+    border: 1.5px solid var(--border); background: var(--cream);
+    color: var(--brown-dark); transition: all 0.15s; line-height: 1.4;
+  }
+  .uso-btn.active { background: var(--orange); color: #FFF8F0; border-color: var(--orange); }
+  .uso-btn:hover:not(.active) { background: var(--orange-pale); border-color: var(--orange); }
   .modal-thanks { display: none; padding: 16px 0 4px; }
   .modal-thanks-icon { font-size: 36px; margin-bottom: 8px; }
   .modal-thanks p { font-size: 13px; color: var(--brown-light); line-height: 1.5; }
+
+
 
   @media (max-width: 480px) {
     .page { padding: 8px 8px 0; }
@@ -171,16 +236,218 @@
     .suggestions { gap: 6px; }
     .chip { font-size: 11px; padding: 5px 10px; }
     .toast { bottom: 80px; font-size: 12px; }
-    #resumeBtn { bottom: 80px; right: 12px; }
+    .float-toast { transform: translateX(calc(50vw - 100% - 10px)); font-size: 13px; padding: 11px 18px; }
+    #resumeBtn { bottom: 112px; }
+    #surveyFloatBtn { bottom: 64px; }
+  }
+
+  /* ── Onboarding ── */
+  .onboarding-overlay {
+    position: fixed; inset: 0; z-index: 400;
+    background: rgba(15,32,68,0.55); backdrop-filter: blur(3px);
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px; opacity: 0; pointer-events: none; transition: opacity 0.3s;
+  }
+  .onboarding-overlay.visible { opacity: 1; pointer-events: all; }
+  .onboarding-card {
+    background: var(--warm-white); border: 1px solid var(--border);
+    border-radius: 28px; padding: 32px 28px 24px; max-width: 380px; width: 100%;
+    text-align: center; box-shadow: 0 12px 48px rgba(15,32,68,0.18);
+    transform: translateY(16px); transition: transform 0.3s;
+  }
+  .onboarding-overlay.visible .onboarding-card { transform: translateY(0); }
+  .ob-steps { display: flex; justify-content: center; gap: 6px; margin-bottom: 28px; }
+  .ob-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); transition: all 0.2s; }
+  .ob-dot.active { background: var(--orange); width: 22px; border-radius: 4px; }
+  .ob-icon { font-size: 48px; margin-bottom: 16px; line-height: 1; }
+  .ob-title { font-family: 'Fraunces', Georgia, serif; font-size: 1.2rem; font-weight: 600; color: var(--brown-dark); margin-bottom: 10px; }
+  .ob-text { font-size: 13px; color: var(--brown-light); line-height: 1.6; margin-bottom: 28px; min-height: 56px; }
+  .ob-actions { display: flex; gap: 8px; }
+  .ob-btn-skip { flex: 1; padding: 11px; border-radius: 12px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: 'DM Sans', system-ui, sans-serif; background: transparent; color: var(--brown-light); border: 1.5px solid var(--border); transition: background 0.15s; }
+  .ob-btn-skip:hover { background: var(--orange-pale); }
+  .ob-btn-next { flex: 2; padding: 11px; border-radius: 12px; font-size: 13px; font-weight: 500; cursor: pointer; font-family: 'DM Sans', system-ui, sans-serif; background: var(--orange); color: #FFF8F0; border: none; transition: background 0.15s; }
+  .ob-btn-next:hover { background: var(--orange-hover); }
+
+  /* ── Dashboard ── */
+  #dashboardPage { display:none; min-height:100vh; background:#0D0A07; color:#F5ECD8; font-family:'DM Sans',system-ui,sans-serif; overflow-y:auto; }
+  #dashboardPage::before { content:''; position:fixed; inset:0; z-index:0; pointer-events:none; background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E"); background-repeat:repeat; background-size:200px; opacity:0.6; }
+  .d-wrap { position:relative; z-index:1; max-width:1100px; margin:0 auto; padding:36px 24px 80px; }
+  .d-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:40px; gap:16px; }
+  .d-logo { display:flex; align-items:center; gap:14px; min-width:0; }
+  .d-logo-badge { width:46px; height:46px; border-radius:14px; background:linear-gradient(135deg,#E06820,#E8A830); display:flex; align-items:center; justify-content:center; font-size:20px; box-shadow:0 4px 20px rgba(224,104,32,0.4); flex-shrink:0; }
+  .d-logo h1 { font-family:'Fraunces',Georgia,serif; font-size:1.3rem; font-weight:800; letter-spacing:-0.02em; white-space:nowrap; }
+  .d-logo p { font-size:11px; color:rgba(245,236,216,0.35); margin-top:2px; letter-spacing:0.08em; text-transform:uppercase; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .d-top-right { display:flex; align-items:center; gap:8px; flex-shrink:0; }
+  .d-last { font-size:11px; color:rgba(245,236,216,0.35); font-family:'DM Mono',monospace; white-space:nowrap; }
+  .d-btn { padding:7px 14px; border-radius:10px; font-size:12px; font-family:'DM Sans',sans-serif; cursor:pointer; transition:all 0.15s; white-space:nowrap; }
+  .d-btn-refresh { background:#1E1915; border:1px solid rgba(237,213,176,0.18); color:rgba(245,236,216,0.55); display:flex; align-items:center; gap:6px; }
+  .d-btn-refresh:hover { border-color:#E06820; color:#F28C4E; }
+  .d-btn-refresh.loading .d-ri { animation:dspin 0.8s linear infinite; display:inline-block; }
+  @keyframes dspin { to { transform:rotate(360deg); } }
+  .d-btn-exit { background:transparent; border:1px solid rgba(237,213,176,0.10); color:rgba(245,236,216,0.35); }
+  .d-btn-exit:hover { border-color:#B91C1C; color:#FCA5A5; }
+  .d-err { background:rgba(185,28,28,0.12); border:1px solid rgba(185,28,28,0.3); border-radius:12px; padding:12px 16px; font-size:13px; color:#FCA5A5; margin-bottom:20px; display:none; }
+  .d-err.show { display:block; }
+  .d-kpi-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:24px; }
+  .d-kpi { background:#161210; border:1px solid rgba(237,213,176,0.10); border-radius:18px; padding:22px 20px; position:relative; overflow:hidden; }
+  .d-kpi::after { content:''; position:absolute; top:0; left:0; right:0; height:2px; background:var(--da,#E06820); }
+  .d-kpi-label { font-size:10px; text-transform:uppercase; letter-spacing:0.1em; color:rgba(245,236,216,0.35); margin-bottom:8px; }
+  .d-kpi-val { font-family:'Fraunces',Georgia,serif; font-size:2.2rem; font-weight:800; line-height:1; margin-bottom:5px; }
+  .d-kpi-sub { font-size:11px; color:rgba(245,236,216,0.35); }
+  .d-kpi-icon { position:absolute; top:16px; right:16px; font-size:20px; opacity:0.18; }
+  .d-row2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:14px; }
+  .d-card { background:#161210; border:1px solid rgba(237,213,176,0.10); border-radius:18px; padding:22px; }
+  .d-card-title { font-size:10px; text-transform:uppercase; letter-spacing:0.1em; color:rgba(245,236,216,0.35); margin-bottom:18px; }
+  .d-bar-list { display:flex; flex-direction:column; gap:9px; }
+  .d-bar-row { display:flex; align-items:center; gap:9px; }
+  .d-bar-lbl { font-size:11px; color:rgba(245,236,216,0.55); width:90px; min-width:0; flex-shrink:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .d-bar-track { flex:1; height:7px; background:#1E1915; border-radius:4px; overflow:hidden; min-width:0; }
+  .d-bar-fill { height:100%; border-radius:4px; transition:width 0.7s cubic-bezier(0.16,1,0.3,1); }
+  .d-bar-n { font-family:'DM Mono',monospace; font-size:10px; color:rgba(245,236,216,0.35); min-width:20px; text-align:right; }
+  .d-donut-wrap { display:flex; align-items:center; gap:20px; }
+  .d-donut-wrap svg { flex-shrink:0; }
+  .d-legend { display:flex; flex-direction:column; gap:7px; flex:1; min-width:0; }
+  .d-legend-item { display:flex; align-items:center; gap:7px; font-size:11px; color:rgba(245,236,216,0.55); }
+  .d-legend-dot { width:9px; height:9px; border-radius:3px; flex-shrink:0; }
+  .d-legend-val { font-family:'DM Mono',monospace; font-size:10px; color:rgba(245,236,216,0.35); margin-left:auto; padding-left:6px; white-space:nowrap; }
+  .d-stars { display:flex; flex-direction:column; gap:7px; }
+  .d-star-row { display:flex; align-items:center; gap:8px; }
+  .d-star-lbl { font-size:11px; color:#F5C862; min-width:52px; }
+  .d-star-track { flex:1; height:7px; background:#1E1915; border-radius:4px; overflow:hidden; }
+  .d-star-fill { height:100%; border-radius:4px; background:linear-gradient(90deg,#E8A830,#F5C862); transition:width 0.7s cubic-bezier(0.16,1,0.3,1); }
+  .d-star-pct { font-family:'DM Mono',monospace; font-size:10px; color:rgba(245,236,216,0.35); min-width:30px; text-align:right; }
+  .d-tl-bars { display:flex; align-items:flex-end; gap:3px; height:72px; }
+  .d-tl-bar { flex:1; background:#E06820; border-radius:3px 3px 0 0; min-height:3px; transition:height 0.5s cubic-bezier(0.16,1,0.3,1); opacity:0.8; }
+  .d-tl-bar:hover { opacity:1; }
+  .d-tl-labels { display:flex; gap:3px; margin-top:5px; }
+  .d-tl-lbl { flex:1; font-family:'DM Mono',monospace; font-size:9px; color:rgba(245,236,216,0.3); text-align:center; overflow:hidden; }
+  .d-table-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+  .d-table { width:100%; border-collapse:collapse; font-size:11px; }
+  .d-table thead th { font-size:10px; text-transform:uppercase; letter-spacing:0.07em; color:rgba(245,236,216,0.35); padding:7px 10px; text-align:left; border-bottom:1px solid rgba(237,213,176,0.10); white-space:nowrap; }
+  .d-table tbody td { padding:9px 10px; border-bottom:1px solid rgba(237,213,176,0.07); color:rgba(245,236,216,0.55); font-family:'DM Mono',monospace; }
+  .d-table tbody tr:last-child td { border-bottom:none; }
+  .d-table tbody tr:hover td { background:#1E1915; }
+  .d-pill { display:inline-block; padding:2px 7px; border-radius:20px; font-size:10px; font-weight:600; font-family:'DM Sans',sans-serif; }
+  .d-pill-g { background:rgba(90,158,64,0.15); color:#7DC45E; border:1px solid rgba(90,158,64,0.25); }
+  .d-pill-a { background:rgba(232,168,48,0.15); color:#F5C862; border:1px solid rgba(232,168,48,0.25); }
+  .d-pill-r { background:rgba(185,28,28,0.15); color:#FCA5A5; border:1px solid rgba(185,28,28,0.25); }
+  .d-empty { text-align:center; padding:32px 16px; }
+  .d-empty-icon { font-size:30px; margin-bottom:8px; opacity:0.3; }
+  .d-empty-text { font-size:11px; color:rgba(245,236,216,0.35); }
+  @media (max-width:900px) {
+    .d-kpi-grid { grid-template-columns:repeat(2,1fr); }
+    .d-last { display:none; }
+  }
+  @media (max-width:640px) {
+    .d-wrap { padding:16px 12px 60px; }
+    .d-top { margin-bottom:24px; gap:10px; }
+    .d-logo-badge { width:38px; height:38px; font-size:17px; border-radius:11px; }
+    .d-logo h1 { font-size:1.05rem; }
+    .d-logo p { display:none; }
+    .d-btn { padding:6px 11px; font-size:11px; }
+    .d-kpi-grid { grid-template-columns:repeat(2,1fr); gap:10px; margin-bottom:16px; }
+    .d-kpi { padding:16px 14px; border-radius:14px; }
+    .d-kpi-val { font-size:1.75rem; }
+    .d-kpi-icon { font-size:16px; top:12px; right:12px; }
+    .d-row2 { grid-template-columns:1fr; gap:10px; margin-bottom:10px; }
+    .d-card { padding:16px 14px; border-radius:14px; }
+    .d-bar-lbl { width:72px; font-size:10px; }
+    .d-donut-wrap { gap:14px; }
+    .d-table-wrap { border-radius:10px; overflow:hidden; overflow-x:auto; }
+    .d-table { font-size:10px; min-width:340px; }
+    .d-table thead th { padding:6px 8px; font-size:9px; }
+    .d-table tbody td { padding:8px 8px; }
+    .d-col-tiempo { display:none; }
+    .d-tl-bars { height:56px; }
+  }
+  @media (max-width:380px) {
+    .d-kpi-val { font-size:1.5rem; }
+    .d-kpi-label { font-size:9px; }
+    .d-kpi-sub { font-size:10px; }
+    .d-bar-lbl { width:60px; }
+    .d-donut-wrap { flex-direction:column; align-items:flex-start; gap:12px; }
+    .d-legend-val { display:none; }
   }
 </style>
 </head>
 <body>
 
+<!-- Onboarding -->
+<div class="onboarding-overlay" id="onboardingOverlay">
+  <div class="onboarding-card">
+    <div class="ob-steps">
+      <div class="ob-dot active" id="obDot0"></div>
+      <div class="ob-dot" id="obDot1"></div>
+      <div class="ob-dot" id="obDot2"></div>
+    </div>
+    <div class="ob-icon" id="obIcon">🗂️</div>
+    <div class="ob-title" id="obTitle">Actas en minutos</div>
+    <div class="ob-text" id="obText">Contame el tipo de reunión, los participantes y los acuerdos. Norma te arma el acta completa, lista para firmar y archivar.</div>
+    <div class="ob-actions">
+      <button class="ob-btn-skip" onclick="closeOnboarding()">Saltear</button>
+      <button class="ob-btn-next" id="obNextBtn" onclick="obNext()">Siguiente →</button>
+    </div>
+  </div>
+</div>
+
+<!-- Dashboard municipio -->
+<div id="dashboardPage">
+  <div class="d-wrap">
+    <div class="d-top">
+      <div class="d-logo">
+        <div class="d-logo-badge">📊</div>
+        <div>
+          <h1>Panel de uso · Norma</h1>
+          <p>Aula Clara — Municipio de Jesús María</p>
+        </div>
+      </div>
+      <div class="d-top-right">
+        <span class="d-last" id="dLastUpdate">Cargando…</span>
+        <button class="d-btn d-btn-refresh" id="dRefreshBtn" onclick="dLoadData()">
+          <span class="d-ri">↺</span> Actualizar
+        </button>
+        <button class="d-btn d-btn-exit" onclick="dExit()">Salir</button>
+      </div>
+    </div>
+
+    <div class="d-err" id="dErr"></div>
+
+    <div class="d-kpi-grid">
+      <div class="d-kpi" style="--da:#E06820"><div class="d-kpi-icon">📋</div><div class="d-kpi-label">Encuestas completadas</div><div class="d-kpi-val" id="dKpiTotal">—</div><div class="d-kpi-sub" id="dKpiTotalSub">Sin datos</div></div>
+      <div class="d-kpi" style="--da:#E8A830"><div class="d-kpi-icon">⭐</div><div class="d-kpi-label">Utilidad promedio</div><div class="d-kpi-val" id="dKpiUtil">—</div><div class="d-kpi-sub" id="dKpiUtilSub">Escala 1–5</div></div>
+      <div class="d-kpi" style="--da:#5A9E40"><div class="d-kpi-icon">✅</div><div class="d-kpi-label">Usaron sin adaptar</div><div class="d-kpi-val" id="dKpiSi">—</div><div class="d-kpi-sub" id="dKpiSiSub">Uso directo</div></div>
+      <div class="d-kpi" style="--da:#7B6FD4"><div class="d-kpi-icon">⏱️</div><div class="d-kpi-label">Tiempo ahorrado est.</div><div class="d-kpi-val" id="dKpiTiempo">—</div><div class="d-kpi-sub" id="dKpiTiempoSub">Horas totales</div></div>
+    </div>
+
+    <div class="d-row2">
+      <div class="d-card"><div class="d-card-title">Herramientas más usadas</div><div class="d-bar-list" id="dChips"><div class="d-empty"><div class="d-empty-icon">📊</div><div class="d-empty-text">Sin datos</div></div></div></div>
+      <div class="d-card"><div class="d-card-title">¿Pudieron usar el documento?</div><div class="d-donut-wrap" id="dUso"><div class="d-empty"><div class="d-empty-icon">🍩</div><div class="d-empty-text">Sin datos</div></div></div></div>
+    </div>
+    <div class="d-row2">
+      <div class="d-card"><div class="d-card-title">Satisfacción directivos</div><div class="d-stars" id="dStars"><div class="d-empty"><div class="d-empty-icon">⭐</div><div class="d-empty-text">Sin datos</div></div></div></div>
+      <div class="d-card"><div class="d-card-title">Actividad últimos 14 días</div><div class="d-tl-bars" id="dTlBars"></div><div class="d-tl-labels" id="dTlLabels"></div></div>
+    </div>
+    <div class="d-card" style="margin-top:14px;">
+      <div class="d-card-title">Últimas 20 respuestas</div>
+      <div class="d-table-wrap">
+        <table class="d-table">
+          <thead><tr><th>Fecha</th><th>Herramienta</th><th>Utilidad</th><th class="d-col-tiempo">Tiempo</th><th>Resultado</th></tr></thead>
+          <tbody id="dTableBody"><tr><td colspan="5" style="text-align:center;padding:28px;color:rgba(245,236,216,0.3)">Cargando…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
+<!-- Botón encuesta flotante -->
+<button id="surveyFloatBtn" class="float-toast" onclick="openModal('')" title="¿Te fue útil Norma hoy?">
+  ⭐ ¿Te fue útil?
+</button>
+
 <!-- Botón resumen flotante -->
-<button id="resumeBtn" title="Generar resumen de esta consulta" onclick="triggerResumen()">
+<button id="resumeBtn" class="float-toast" title="Generar resumen de esta consulta" onclick="triggerResumen()">
   📋 Resumen
 </button>
 
@@ -189,7 +456,7 @@
   <div class="modal-card">
     <div id="surveyForm">
       <div class="modal-title">¿Te fue útil? 🗂️</div>
-      <div class="modal-sub">Solo 3 preguntas — menos de 15 segundos</div>
+      <div class="modal-sub">3 preguntas — menos de 15 segundos</div>
       <div class="stars" id="starsRow" role="group" aria-label="Utilidad del 1 al 5">
         <span class="star" data-v="1" onclick="setStar(1)" role="button" aria-label="1 estrella">⭐</span>
         <span class="star" data-v="2" onclick="setStar(2)" role="button" aria-label="2 estrellas">⭐</span>
@@ -204,12 +471,12 @@
         <option value="60">1 hora</option>
         <option value="120">Más de 2 horas</option>
       </select>
-      <div class="modal-label">¿Lo pudiste usar?</div>
-      <select class="modal-select" id="surveyUso">
-        <option value="si">Sí, directo</option>
-        <option value="parcial">Lo adapté</option>
-        <option value="no">No me sirvió</option>
-      </select>
+      <div class="modal-label">¿Pudiste usar lo que te generé?</div>
+      <div class="uso-btns" id="usoBtns">
+        <button class="uso-btn" data-v="si" onclick="setUso('si')">✅ Sí, directo</button>
+        <button class="uso-btn" data-v="parcial" onclick="setUso('parcial')">🔧 Lo adapté</button>
+        <button class="uso-btn" data-v="no" onclick="setUso('no')">❌ No me sirvió</button>
+      </div>
       <div class="modal-actions">
         <button class="modal-btn secondary" onclick="closeModal()">Omitir</button>
         <button class="modal-btn primary" id="surveySubmitBtn" onclick="submitSurvey()" disabled>Enviar</button>
@@ -247,7 +514,7 @@
     </div>
     <div class="header-text">
       <div class="header-name">Norma</div>
-      <div class="header-sub">Asistente de gestión · Directivos · Primaria Córdoba</div>
+      <div class="header-sub" id="headerSub">Asistente de gestión · Directivos · Primaria Córdoba</div>
     </div>
     <div class="status-badge online" id="statusBadge">
       <div class="status-dot"></div>
@@ -273,11 +540,12 @@
     </div>
 
     <div class="suggestions" id="suggestions">
-      <button class="chip" onclick="setFlow('actas'); sendSuggestion('Necesito hacer un acta de reunión')">Acta de reunión 📄</button>
-      <button class="chip" onclick="setFlow('comunicados'); sendSuggestion('Necesito hacer un comunicado')">Comunicado 📢</button>
-      <button class="chip" onclick="setFlow('proyectos'); sendSuggestion('Necesito armar un proyecto institucional')">Proyecto institucional 🏫</button>
-      <button class="chip" onclick="setFlow('licencias'); sendSuggestion('Necesito gestionar una licencia docente')">Licencias docentes 📋</button>
-      <button class="chip" onclick="setFlow('general'); sendSuggestion('Tengo una consulta de gestión')">Consulta de gestión 💬</button>
+      <button class="chip" onclick="setFlow('actas'); sendSuggestion('Necesito hacer un acta de reunión','Acta de reunión')">Acta de reunión 📄</button>
+      <button class="chip" onclick="setFlow('comunicados'); sendSuggestion('Necesito hacer un comunicado','Comunicado')">Comunicado 📢</button>
+      <button class="chip" onclick="setFlow('proyectos'); sendSuggestion('Necesito armar un proyecto institucional','Proyecto institucional')">Proyecto institucional 🏫</button>
+      <button class="chip" onclick="setFlow('licencias'); sendSuggestion('Necesito gestionar una licencia docente','Licencias docentes')">Licencias docentes 📋</button>
+      <button class="chip" onclick="setFlow('disciplina'); sendSuggestion('Necesito gestionar una situación disciplinaria con un docente','Disciplina docente')">Disciplina docente ⚖️</button>
+      <button class="chip" onclick="setFlow('general'); sendSuggestion('Tengo una consulta de gestión','Consulta de gestión')">Consulta de gestión 💬</button>
     </div>
 
     <div class="typing-row" id="typingRow">
@@ -314,6 +582,9 @@
 <script>
 // ── Config ──────────────────────────────────────────────────────
 const WORKER_URL    = 'https://norma-aulaclara.abfacundotorres.workers.dev';
+
+// Session ID anónimo — consolida todos los eventos de una misma sesión
+const SESSION_ID = Math.random().toString(36).slice(2,10) + Date.now().toString(36);
 const METRICS_URL   = 'https://norma-aulaclara.abfacundotorres.workers.dev'; // mismo endpoint — el Apps Script se encarga
 const MAX_CHARS     = 2000;
 const MAX_RETRY     = 2;
@@ -321,25 +592,22 @@ const RETRY_BASE    = 1200;
 const CLIENT_TMOUT  = 33000;
 const HISTORY_LIMIT = 16;
 const RESUME_THRESHOLD = 4; // mensajes mínimos para mostrar botón resumen
+const SURVEY_THRESHOLD  = 5; // mensajes para mostrar botón encuesta flotante
 
 // ── State ───────────────────────────────────────────────────────
-let history       = [];
-let isLoading     = false;
-let toastTimer    = null;
-let sessionPin    = null;
-let sessionEscuela = '';  // v7.1: nombre legible de escuela, devuelto por _ping al validar PIN
-let activeFlow    = 'general';
-let directivoCtx  = { nombre: '', cargo: '' };
-let surveyRating  = 0;
-let lastDocTitle  = '';
-let messageCount  = 0;
-
-// v7.2: session_id único por carga de página (vida del tab).
-// Antes el frontend nunca lo mandaba → columna Session ID quedaba vacía en el Sheet.
-// Usamos crypto.randomUUID si está disponible (90%+ browsers), fallback a Math.random.
-const sessionId = (typeof crypto !== 'undefined' && crypto.randomUUID)
-  ? crypto.randomUUID()
-  : 'norma-' + Math.random().toString(36).slice(2, 10) + '-' + Date.now().toString(36);
+let history      = [];
+let isLoading    = false;
+let toastTimer   = null;
+let sessionPin   = null;
+let dashboardPin = '';
+let activeFlow   = 'general';
+let directivoCtx = { nombre: '', cargo: '' };
+let surveyRating = 0;
+let surveyUso = '';
+let lastDocTitle = '';
+let messageCount = 0;
+let surveyShown   = false;
+let sessionChip   = '';  // chip que usó el usuario para iniciar
 
 // ── DOM refs ────────────────────────────────────────────────────
 const $   = id => document.getElementById(id);
@@ -481,10 +749,17 @@ function setStar(n) {
   $('surveySubmitBtn').disabled = false;
 }
 
+function setUso(v) {
+  surveyUso = v;
+  document.querySelectorAll('.uso-btn').forEach(b => b.classList.toggle('active', b.dataset.v === v));
+}
+
 function openModal(docTitle) {
   lastDocTitle = docTitle || '';
-  surveyRating = 0;
+  $('surveyFloatBtn').classList.remove('visible');
+  surveyRating = 0; surveyUso = '';
   document.querySelectorAll('.star').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.uso-btn').forEach(b => b.classList.remove('active'));
   $('surveySubmitBtn').disabled = true;
   $('surveyForm').style.display = 'block';
   $('surveyThanks').style.display = 'none';
@@ -493,6 +768,13 @@ function openModal(docTitle) {
 
 function closeModal() {
   $('surveyModal').classList.remove('visible');
+  // Solo volver a mostrar si NO completó la encuesta
+  if (!surveyShown && messageCount >= SURVEY_THRESHOLD) {
+    setTimeout(() => {
+      $('surveyFloatBtn').style.display = ''; // restaurar display
+      $('surveyFloatBtn').classList.add('visible');
+    }, 3000);
+  }
 }
 
 async function submitSurvey() {
@@ -503,24 +785,23 @@ async function submitSurvey() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        // v7.1: el worker procesa tipo='encuesta':
-        //   - valida el PIN
-        //   - inyecta escuela (desde SCHOOLS_MAP env) y municipio (desde MUNICIPIO_NAME env)
-        //   - reenvía al Apps Script via METRICS_WEBHOOK
-        // Mandamos pin (no municipio): el worker deriva todo del PIN server-side.
-        // v7.2: agregados `uso` (3ra pregunta) y `session_id` (vida del tab).
-        tipo: 'encuesta',
-        timestamp: new Date().toISOString(),
-        pin: sessionPin || '',
-        session_id: sessionId,
-        flow: activeFlow,
-        documento: lastDocTitle,
-        utilidad: surveyRating,
-        tiempo: $('surveyTiempo').value,
-        uso: $('surveyUso').value,
+        _survey:    true,
+        tipo:       'encuesta',
+        timestamp:  new Date().toISOString(),
+        session_id: SESSION_ID,
+        municipio:  sessionPin  || 'demo',
+        flow:       activeFlow,
+        chip_usado: sessionChip || activeFlow,
+        documento:  lastDocTitle,
+        utilidad:   surveyRating,
+        tiempo:     $('surveyTiempo').value,
+        uso:        surveyUso,
       }),
     });
-  } catch { /* silencioso — no bloquear UX por fallo de encuesta */ }
+  } catch { /* silencioso */ }
+  surveyShown = true;
+  $('surveyFloatBtn').classList.remove('visible');
+  $('surveyFloatBtn').style.display = 'none'; // ocultar permanentemente
   $('surveyForm').style.display = 'none';
   $('surveyThanks').style.display = 'block';
   setTimeout(closeModal, 2200);
@@ -528,7 +809,12 @@ async function submitSurvey() {
 
 // ── Botón resumen ───────────────────────────────────────────────
 function updateResumeBtn() {
-  $('resumeBtn').classList.toggle('visible', messageCount >= RESUME_THRESHOLD && !isLoading);
+  const showResume = messageCount >= RESUME_THRESHOLD && !isLoading;
+  const showSurvey = messageCount >= SURVEY_THRESHOLD && !surveyShown && !isLoading;
+  // Ambos independientes — resumen siempre visible si hay suficientes mensajes,
+  // encuesta aparece una sola vez por sesión
+  $('resumeBtn').classList.toggle('visible', showResume);
+  if (showSurvey) $('surveyFloatBtn').classList.add('visible');
 }
 
 async function triggerResumen() {
@@ -552,8 +838,24 @@ function makeDownloadBtn(content, label='⬇️ Descargar Word', cls='download')
       await generateWord(content);
       b.innerHTML='✅ Descargado';
       setTimeout(()=>{b.innerHTML=label;b.disabled=false;},3000);
-      // Abrir encuesta después de descarga exitosa
-      setTimeout(()=>openModal(docTitle), 800);
+      // Registrar descarga en métricas
+      try {
+        fetch(WORKER_URL, {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({
+            _survey:false,
+            tipo:'evento', timestamp:new Date().toISOString(),
+            session_id:SESSION_ID, municipio:sessionPin||'demo',
+            flow:activeFlow, chip_usado:sessionChip||'',
+            doc_descargado:docTitle,
+            rag_usado:false, rag_chunks:0, rag_error:false,
+            model_used:'download',
+          }),
+        });
+      } catch {}
+      // Abrir encuesta después de descarga — solo si no completó
+      if (!surveyShown) setTimeout(()=>openModal(docTitle), 800);
     } catch(e) {
       b.innerHTML='❌ Error'; b.disabled=false;
       showToast(e.message||'Error al generar.');
@@ -615,7 +917,7 @@ async function fetchMsg(message, attempt=0) {
   try {
     const res=await fetch(WORKER_URL,{
       method:'POST', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({message,history:historyPayload(),pin:sessionPin,flow:activeFlow,ctx:directivoCtx}),
+      body:JSON.stringify({message,history:historyPayload(),pin:sessionPin,flow:activeFlow,ctx:directivoCtx,chip_usado:sessionChip,session_id:SESSION_ID}),
       signal:ctrl.signal,
     });
     clearTimeout(tmout);
@@ -650,15 +952,20 @@ async function sendMessage(text) {
   $('typingRow').classList.add('visible');
   msg.scrollTop=msg.scrollHeight;
   let loadTimer=null;
-  if(activeFlow==='actas') loadTimer=setTimeout(()=>showToast('Norma está armando el acta…',15000),2500);
-  else if(activeFlow==='proyectos') loadTimer=setTimeout(()=>showToast('Norma está armando el proyecto…',15000),2500);
-  else if(activeFlow==='comunicados') loadTimer=setTimeout(()=>showToast('Norma está redactando el comunicado…',15000),2500);
-  else if(activeFlow==='licencias') loadTimer=setTimeout(()=>showToast('Norma está consultando la normativa…',15000),2500);
-  else if(activeFlow==='resumen') loadTimer=setTimeout(()=>showToast('Norma está generando el resumen…',15000),2500);
+  // Solo mostrar toast de carga si la respuesta tarda más de 6 segundos
+  const loadMsgs = {
+    actas:       'Armando el acta…',
+    proyectos:   'Armando el proyecto…',
+    comunicados: 'Redactando el comunicado…',
+    licencias:   'Consultando la normativa…',
+    resumen:     'Generando el resumen…',
+  };
+  if(loadMsgs[activeFlow]) loadTimer=setTimeout(()=>showToast(loadMsgs[activeFlow],8000),6000);
   const pending={role:'user',parts:[{text}]};
   try {
     const reply=await fetchMsg(text);
     $('typingRow').classList.remove('visible');
+    $('toast').classList.remove('show'); // limpiar toast de carga al recibir respuesta
     appendMessage(reply,'bot');
     history.push(pending); history.push({role:'model',parts:[{text:reply}]});
     if(history.length>HISTORY_LIMIT*2) history=history.slice(-HISTORY_LIMIT*2);
@@ -683,9 +990,10 @@ function updateChar(){const left=MAX_CHARS-inp.value.length,el=$('charCount');el
 function setStatus(online){$('statusBadge').className=`status-badge ${online?'online':'offline'}`;$('statusText').textContent=online?'En línea':'Sin conexión';$('offlineBanner').classList.toggle('visible',!online);}
 function setFlow(f){activeFlow=f;}
 
-function sendSuggestion(text){
+function sendSuggestion(text, chip){
   if(isLoading)return; if(sug)sug.style.display='none';
   directivoCtx.cargo='';
+  sessionChip = chip || '';
   inp.value=text; autoResize(); updateChar(); handleSend();
 }
 
@@ -694,6 +1002,9 @@ function handleSend(){const text=inp.value.trim();if(!text||isLoading)return;inp
 function resetChat(){
   if(isLoading)return;
   history=[]; activeFlow='general'; directivoCtx={nombre:'',cargo:''};
+  surveyShown=false; sessionChip='';
+  $('surveyFloatBtn').style.display='';
+  $('surveyFloatBtn').classList.remove('visible');
   messageCount=0; $('resumeBtn').classList.remove('visible');
   msg.querySelectorAll('.msg-row').forEach((r,i)=>{if(i>0)r.remove();});
   if(sug)sug.style.display='flex';
@@ -702,68 +1013,44 @@ function resetChat(){
 }
 
 // ── PIN ─────────────────────────────────────────────────────────
-// v7.1: validación server-side via _ping (replicado de Clara /api/login).
-// El worker valida el PIN contra MUNICIPIO_PINS / DASHBOARD_PIN y devuelve { ok, role, escuela }.
-// Beneficios vs v7:
-//   - Cierra el agujero pre-existente: antes cualquier string length>=4 entraba a la app.
-//   - El frontend recibe `escuela` (nombre legible) sin tener que conocer SCHOOLS_MAP.
 async function submitPin() {
-  const pi = $('pinInput'), pe = $('pinError');
-  const pin = pi.value.trim().toUpperCase();
-  if (!pin || pin.length < 4) { pe.textContent = 'Ingresá un código válido.'; pi.focus(); return; }
+  const pi=$('pinInput'), pe=$('pinError'), pb=$('pinBtn');
+  const pin=pi.value.trim().toUpperCase();
+  if(!pin||pin.length<4){pe.textContent='Ingresá un código válido.';pi.focus();return;}
 
-  pe.textContent = '';
-  const pinBtn = $('pinBtn');
-  pinBtn.disabled = true; pinBtn.textContent = 'Verificando…';
-
+  pb.disabled=true; pb.textContent='Verificando…';
+  pe.textContent='';
   try {
-    const res = await fetch(WORKER_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ _ping: true, pin }),
+    const res=await fetch(WORKER_URL,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({_ping:true,pin}),
     });
-    // v7.2: diferenciar server error de network error
-    if (!res.ok) {
-      // 429 = rate limit, 500/502 = server. Mensaje específico.
-      if (res.status === 429) {
-        pe.textContent = 'Demasiados intentos. Esperá un minuto.';
-      } else {
-        pe.textContent = 'El servicio no está disponible. Intentá en unos minutos.';
+    const data=await res.json().catch(()=>({}));
+    if(!res.ok||!data.ok){
+      pe.textContent=data.error||'Código incorrecto. Revisá e intentá de nuevo.';
+      pi.focus(); return;
+    }
+    if(data.role==='dashboard'){
+      dashboardPin=pin;
+      $('pinScreen').style.display='none';
+      showDashboard();
+    } else {
+      sessionPin=pin;
+      // v7.3: si el worker devuelve la escuela mapeada, mostrarla en el header
+      if (data.escuela) {
+        const hs = $('headerSub');
+        if (hs) hs.textContent = data.escuela;
       }
-      pi.focus();
-      return;
+      $('pinScreen').style.display='none';
+      $('mainPage').style.display='flex';
+      showOnboarding();
+      focusInput();
     }
-    const data = await res.json().catch(() => ({}));
-    if (!data.ok) {
-      pe.textContent = data.error || 'Código incorrecto.';
-      pi.focus();
-      return;
-    }
-    // v7.2: role 'dashboard' — el worker reconoce el PIN de admin pero el frontend de Norma
-    // todavía no tiene UI de dashboard. Mensaje claro para no entrar al chat sin permisos.
-    if (data.role === 'dashboard') {
-      pe.textContent = 'PIN de administrador reconocido — el dashboard aún no está disponible aquí.';
-      pi.focus();
-      return;
-    }
-    // Validación exitosa como directivo
-    sessionPin = pin;
-    sessionEscuela = data.escuela || '';
-    // Si el worker devolvió escuela legible, mostrarla en el header (sutil, junto al subtítulo)
-    if (sessionEscuela) {
-      const sub = document.querySelector('.header-sub');
-      if (sub) sub.textContent = sessionEscuela;
-    }
-    $('pinScreen').style.display = 'none';
-    $('mainPage').style.display = 'flex';
-    inp.focus();
-  } catch(e) {
-    // Falla de red real (no llegó al server)
-    pe.textContent = 'Sin conexión. Revisá tu red e intentá de nuevo.';
-    pi.focus();
+  } catch {
+    pe.textContent='Sin conexión. Revisá tu internet e intentá de nuevo.';
   } finally {
-    pinBtn.disabled = false;
-    pinBtn.textContent = 'Ingresar';
+    pb.disabled=false; pb.textContent='Ingresar';
   }
 }
 $('pinInput').addEventListener('keydown',e=>{if(e.key==='Enter')submitPin();});
@@ -778,10 +1065,244 @@ $('surveyModal').addEventListener('click',e=>{if(e.target===$('surveyModal'))clo
 btn.addEventListener('click',handleSend);
 inp.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();handleSend();}});
 inp.addEventListener('input',()=>{autoResize();updateChar();});
-inp.addEventListener('focus',()=>{document.querySelector('meta[name=viewport]').setAttribute('content','width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no');});
+inp.addEventListener('focus',()=>{
+  document.querySelector('meta[name=viewport]')
+    .setAttribute('content','width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no');
+});
 window.addEventListener('online',()=>setStatus(true));
 window.addEventListener('offline',()=>setStatus(false));
 setStatus(navigator.onLine);
+
+// Solo hacer foco en desktop — en mobile el teclado no debe abrirse solo
+function focusInput() {
+  if (window.innerWidth > 900) inp.focus();
+}
+
+function showDashboard() {
+  $('dashboardPage').style.display = 'block';
+  document.body.style.overflow = 'auto';
+  dLoadData();
+}
+
+function dExit() {
+  $('dashboardPage').style.display = 'none';
+  document.body.style.overflow = 'hidden';
+  $('pinScreen').style.display = 'flex';
+  $('pinInput').value = '';
+  $('pinError').textContent = '';
+}
+
+// ── Onboarding ──────────────────────────────────────────────────
+const OB_STORAGE_KEY = 'norma_ob_done_v1';
+const OB_SLIDES = [
+  {
+    icon:  '🗂️',
+    title: 'Actas en minutos',
+    text:  'Contame el tipo de reunión, los participantes y los acuerdos. Norma te arma el acta completa, lista para firmar y archivar.',
+  },
+  {
+    icon:  '📋',
+    title: 'Comunicados y proyectos',
+    text:  'Comunicados a familias, circulares internas, proyectos institucionales. Todo con el formato correcto y descargable en Word.',
+  },
+  {
+    icon:  '⚖️',
+    title: 'Normativa y licencias',
+    text:  'Consultas sobre licencias docentes, disciplina y gestión institucional, respaldadas en la normativa vigente de Córdoba.',
+  },
+];
+let obStep = 0;
+
+function showOnboarding() {
+  try { if (localStorage.getItem(OB_STORAGE_KEY)) return; } catch {}
+  obStep = 0;
+  renderObSlide();
+  $('onboardingOverlay').classList.add('visible');
+}
+
+function renderObSlide() {
+  const s = OB_SLIDES[obStep];
+  $('obIcon').textContent  = s.icon;
+  $('obTitle').textContent = s.title;
+  $('obText').textContent  = s.text;
+  $('obNextBtn').textContent = obStep < OB_SLIDES.length - 1 ? 'Siguiente →' : '¡Empezar! 🎉';
+  OB_SLIDES.forEach((_, i) => {
+    const dot = $('obDot' + i);
+    if (dot) dot.classList.toggle('active', i === obStep);
+  });
+}
+
+function obNext() {
+  if (obStep < OB_SLIDES.length - 1) {
+    obStep++;
+    renderObSlide();
+  } else {
+    closeOnboarding();
+  }
+}
+
+function closeOnboarding() {
+  $('onboardingOverlay').classList.remove('visible');
+  try { localStorage.setItem(OB_STORAGE_KEY, '1'); } catch {}
+}
+
+// ── Dashboard ────────────────────────────────────────────────────
+function dSet(id, val, sub) {
+  const e=$('d'+id), s=$('d'+id+'Sub');
+  if(e) e.textContent = val;
+  if(s) s.textContent = sub;
+}
+
+function dErr(m) {
+  const el=$('dErr');
+  el.textContent=m;
+  el.classList.toggle('show',!!m);
+}
+
+function dEsc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function dEmpty(icon) {
+  return `<div class="d-empty"><div class="d-empty-icon">${icon}</div><div class="d-empty-text">Sin datos aún</div></div>`;
+}
+
+async function dLoadData() {
+  const btn=$('dRefreshBtn');
+  btn.classList.add('loading');
+  dErr('');
+  try {
+    const res=await fetch(WORKER_URL,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({_dashboard:true,pin:dashboardPin}),
+    });
+    let data;
+    try { data=await res.json(); } catch { throw new Error('Respuesta inválida del servidor (HTTP '+res.status+')'); }
+    if(!res.ok||!data.ok){
+      throw new Error(data.error||'Error del servidor (HTTP '+res.status+')');
+    }
+    const rows=Array.isArray(data.rows)?data.rows:[];
+    dRenderAll(rows,data);
+    $('dLastUpdate').textContent='Act. '+new Date().toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'});
+  } catch(e) {
+    const m=e.message==='Failed to fetch'
+      ?'Sin conexión al servidor. Verificá tu internet.'
+      :e.message;
+    dErr('⚠️ '+m);
+    $('dLastUpdate').textContent='Error';
+  } finally {
+    $('dRefreshBtn').classList.remove('loading');
+  }
+}
+
+function dRenderAll(rows,data) {
+  dRenderKPI(rows,data);
+  dRenderChips(rows);
+  dRenderUso(rows);
+  dRenderStars(rows);
+  dRenderTimeline(rows);
+  dRenderTable(rows);
+}
+
+function dRenderKPI(rows,data) {
+  const total=rows.length||data.total||0;
+  dSet('KpiTotal',total,total+' encuesta'+(total!==1?'s':'')+' registrada'+(total!==1?'s':''));
+
+  const utils=rows.map(r=>Number(r[5])).filter(Boolean);
+  const avg=utils.length?(utils.reduce((a,b)=>a+b,0)/utils.length).toFixed(1):(data.utilidad_promedio||null);
+  dSet('KpiUtil',avg?avg+' / 5':'—',avg?utils.length+' calificaciones':'Sin calificaciones');
+
+  const si=rows.filter(r=>String(r[7])==='Í, directo').length
+          ||rows.filter(r=>String(r[7])==='Sí, directo').length;
+  const pct=total?Math.round(si/total*100):0;
+  dSet('KpiSi',pct+'%',si+' de '+total+' respuestas');
+
+  const tMap={'Menos de 15 min':0.2,'30 minutos':0.5,'1 hora':1,'Más de 2 horas':2};
+  let hs=0;
+  rows.forEach(r=>{const t=tMap[String(r[6]||'')];if(t)hs+=t;});
+  dSet('KpiTiempo',hs>0?(hs>=100?Math.round(hs)+'hs':hs.toFixed(0)+'hs'):'—',hs>0?'estimado por encuestas':'Sin datos');
+}
+
+function dRenderChips(rows) {
+  const counts={};
+  rows.forEach(r=>{const c=String(r[3]||'').trim()||'(sin chip)';counts[c]=(counts[c]||0)+1;});
+  const sorted=Object.entries(counts).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  const max=sorted[0]?.[1]||1;
+  const el=$('dChips');
+  if(!sorted.length){el.innerHTML=dEmpty('📊');return;}
+  const colors=['#E06820','#E8A830','#7DC45E','#F28C4E','#7B6FD4','#4E9BB5','#D46F7B','#8FB55A'];
+  el.innerHTML=sorted.map(([lbl,n],i)=>`
+    <div class="d-bar-row">
+      <div class="d-bar-lbl" title="${dEsc(lbl)}">${dEsc(lbl)}</div>
+      <div class="d-bar-track"><div class="d-bar-fill" style="width:${Math.round(n/max*100)}%;background:${colors[i%colors.length]}"></div></div>
+      <div class="d-bar-n">${n}</div>
+    </div>`).join('');
+}
+
+function dRenderUso(rows) {
+  const counts={'Sí, directo':0,'Lo adapté':0,'No me sirvió':0};
+  rows.forEach(r=>{const u=String(r[7]||'');if(u in counts)counts[u]++;});
+  const total=Object.values(counts).reduce((a,b)=>a+b,0);
+  const el=$('dUso');
+  if(!total){el.innerHTML=dEmpty('🍩');return;}
+  const pal=[['#5A9E40','#7DC45E'],['#E8A830','#F5C862'],['#B91C1C','#EF4444']];
+  const entries=Object.entries(counts);
+  let cum=0;
+  const angles=entries.map(([,v])=>{const a=v/total*360;const o={start:cum,end:cum+a};cum+=a;return o;});
+  const R=52,r=32,cx=66,cy=66;
+  function arc(s,e){
+    const sr=(s-90)*Math.PI/180,er=(e-90)*Math.PI/180,ls=e-s>180?1:0;
+    return `M${cx+R*Math.cos(sr)} ${cy+R*Math.sin(sr)} A${R} ${R} 0 ${ls} 1 ${cx+R*Math.cos(er)} ${cy+R*Math.sin(er)} L${cx+r*Math.cos(er)} ${cy+r*Math.sin(er)} A${r} ${r} 0 ${ls} 0 ${cx+r*Math.cos(sr)} ${cy+r*Math.sin(sr)} Z`;
+  }
+  const paths=entries.map(([lbl,v],i)=>{
+    if(!v)return'';
+    const{start,end}=angles[i];
+    return `<path d="${arc(start,end<start+0.5?start+0.5:end)}" fill="${pal[i][0]}" opacity="0.85"><title>${lbl}: ${v} (${Math.round(v/total*100)}%)</title></path>`;
+  }).join('');
+  const siPct=Math.round(counts['Sí, directo']/total*100);
+  const svg=`<svg width="132" height="132" viewBox="0 0 132 132"><circle cx="${cx}" cy="${cy}" r="${R}" fill="#1E1915"/>${paths}<text x="${cx}" y="${cy}" text-anchor="middle" dy="0.35em" fill="#F5ECD8" font-family="Fraunces,serif" font-size="17" font-weight="800">${siPct}%</text><text x="${cx}" y="${cy+14}" text-anchor="middle" fill="rgba(245,236,216,0.35)" font-family="DM Sans,sans-serif" font-size="8">directos</text></svg>`;
+  const legend=entries.map(([lbl,v],i)=>`<div class="d-legend-item"><div class="d-legend-dot" style="background:${pal[i][0]}"></div><span>${lbl}</span><span class="d-legend-val">${v} (${Math.round(v/total*100)}%)</span></div>`).join('');
+  el.innerHTML=svg+`<div class="d-legend">${legend}</div>`;
+}
+
+function dRenderStars(rows) {
+  const counts={5:0,4:0,3:0,2:0,1:0};
+  rows.forEach(r=>{const u=Number(r[5]);if(u>=1&&u<=5)counts[u]++;});
+  const total=Object.values(counts).reduce((a,b)=>a+b,0);
+  const el=$('dStars');
+  if(!total){el.innerHTML=dEmpty('⭐');return;}
+  const max=Math.max(...Object.values(counts))||1;
+  el.innerHTML=[5,4,3,2,1].map(n=>{
+    const v=counts[n],pct=Math.round(v/total*100);
+    return `<div class="d-star-row"><div class="d-star-lbl">${'★'.repeat(n)}</div><div class="d-star-track"><div class="d-star-fill" style="width:${Math.round(v/max*100)}%"></div></div><div class="d-star-pct">${pct}%</div></div>`;
+  }).join('');
+}
+
+function dRenderTimeline(rows) {
+  const days=14,now=new Date(),buckets={};
+  for(let i=0;i<days;i++){const d=new Date(now);d.setDate(d.getDate()-(days-1-i));buckets[d.toLocaleDateString('es-AR')]=0;}
+  rows.forEach(r=>{const k=String(r[0]||'');if(k in buckets)buckets[k]++;});
+  const vals=Object.values(buckets),maxV=Math.max(...vals,1),keys=Object.keys(buckets);
+  $('dTlBars').innerHTML=vals.map((v,i)=>`<div class="d-tl-bar" style="height:${Math.max(3,Math.round(v/maxV*68))}px;opacity:${(0.4+0.6*v/maxV).toFixed(2)}" title="${keys[i]}: ${v}"></div>`).join('');
+  $('dTlLabels').innerHTML=keys.map((k,i)=>{const p=k.split('/'),show=(i%3===0||i===keys.length-1)?p[0]+'/'+p[1]:'';return `<div class="d-tl-lbl">${show}</div>`;}).join('');
+}
+
+function dRenderTable(rows) {
+  const tbody=$('dTableBody');
+  const recent=rows.slice(-20).reverse();
+  if(!recent.length){tbody.innerHTML=`<tr><td colspan="5" style="text-align:center;padding:28px;color:rgba(245,236,216,0.3)">Sin registros aún</td></tr>`;return;}
+  const pilCls={'Sí, directo':'d-pill-g','Lo adapté':'d-pill-a','No me sirvió':'d-pill-r'};
+  tbody.innerHTML=recent.map(r=>`<tr>
+    <td>${dEsc(String(r[0]||''))} ${dEsc(String(r[1]||''))}</td>
+    <td>${dEsc(String(r[3]||'—'))}</td>
+    <td>${r[5]?'★'.repeat(Math.min(5,Number(r[5]))):'—'}</td>
+    <td class="d-col-tiempo">${dEsc(String(r[6]||'—'))}</td>
+    <td>${r[7]?`<span class="d-pill ${pilCls[r[7]]||'d-pill-a'}">${dEsc(String(r[7]))}</span>`:'—'}</td>
+  </tr>`).join('');
+}
+
+dRenderTimeline([]);
 </script>
 </body>
 </html>
