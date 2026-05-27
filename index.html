@@ -189,7 +189,7 @@
   <div class="modal-card">
     <div id="surveyForm">
       <div class="modal-title">¿Te fue útil? 🗂️</div>
-      <div class="modal-sub">Solo 2 preguntas — menos de 10 segundos</div>
+      <div class="modal-sub">Solo 3 preguntas — menos de 15 segundos</div>
       <div class="stars" id="starsRow" role="group" aria-label="Utilidad del 1 al 5">
         <span class="star" data-v="1" onclick="setStar(1)" role="button" aria-label="1 estrella">⭐</span>
         <span class="star" data-v="2" onclick="setStar(2)" role="button" aria-label="2 estrellas">⭐</span>
@@ -203,6 +203,12 @@
         <option value="30">30 minutos</option>
         <option value="60">1 hora</option>
         <option value="120">Más de 2 horas</option>
+      </select>
+      <div class="modal-label">¿Lo pudiste usar?</div>
+      <select class="modal-select" id="surveyUso">
+        <option value="si">Sí, directo</option>
+        <option value="parcial">Lo adapté</option>
+        <option value="no">No me sirvió</option>
       </select>
       <div class="modal-actions">
         <button class="modal-btn secondary" onclick="closeModal()">Omitir</button>
@@ -327,6 +333,13 @@ let directivoCtx  = { nombre: '', cargo: '' };
 let surveyRating  = 0;
 let lastDocTitle  = '';
 let messageCount  = 0;
+
+// v7.2: session_id único por carga de página (vida del tab).
+// Antes el frontend nunca lo mandaba → columna Session ID quedaba vacía en el Sheet.
+// Usamos crypto.randomUUID si está disponible (90%+ browsers), fallback a Math.random.
+const sessionId = (typeof crypto !== 'undefined' && crypto.randomUUID)
+  ? crypto.randomUUID()
+  : 'norma-' + Math.random().toString(36).slice(2, 10) + '-' + Date.now().toString(36);
 
 // ── DOM refs ────────────────────────────────────────────────────
 const $   = id => document.getElementById(id);
@@ -490,18 +503,21 @@ async function submitSurvey() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        // v7.1: el worker ahora procesa tipo='encuesta':
+        // v7.1: el worker procesa tipo='encuesta':
         //   - valida el PIN
         //   - inyecta escuela (desde SCHOOLS_MAP env) y municipio (desde MUNICIPIO_NAME env)
         //   - reenvía al Apps Script via METRICS_WEBHOOK
         // Mandamos pin (no municipio): el worker deriva todo del PIN server-side.
+        // v7.2: agregados `uso` (3ra pregunta) y `session_id` (vida del tab).
         tipo: 'encuesta',
         timestamp: new Date().toISOString(),
         pin: sessionPin || '',
+        session_id: sessionId,
         flow: activeFlow,
         documento: lastDocTitle,
         utilidad: surveyRating,
         tiempo: $('surveyTiempo').value,
+        uso: $('surveyUso').value,
       }),
     });
   } catch { /* silencioso — no bloquear UX por fallo de encuesta */ }
