@@ -91,6 +91,7 @@
   .bubble ul li { list-style-type: disc; }
   .bubble ol li { list-style-type: decimal; }
   .bubble hr { border: none; border-top: 1px solid var(--border); margin: 10px 0; }
+  .msg-fuentes { margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--border); font-size: 12px; line-height: 1.5; color: var(--brown-light); font-style: italic; }
   .bubble-actions { display: flex; gap: 6px; padding: 0 4px; flex-wrap: wrap; }
   .action-btn { display: flex; align-items: center; gap: 4px; font-size: 11px; padding: 4px 10px; background: transparent; border: 1px solid var(--border); border-radius: 12px; cursor: pointer; color: var(--brown-light); transition: background 0.15s, color 0.15s; font-family: 'DM Sans', system-ui, sans-serif; }
   .action-btn:hover { background: var(--orange-pale); color: var(--orange); border-color: var(--orange); }
@@ -609,7 +610,6 @@ const WORKER_URL    = 'https://norma-aulaclara.abfacundotorres.workers.dev';
 
 // Session ID anónimo — consolida todos los eventos de una misma sesión
 const SESSION_ID = Math.random().toString(36).slice(2,10) + Date.now().toString(36);
-const METRICS_URL   = 'https://norma-aulaclara.abfacundotorres.workers.dev'; // mismo endpoint — el Apps Script se encarga
 const MAX_CHARS     = 2000;
 const MAX_RETRY     = 2;
 const RETRY_BASE    = 1200;
@@ -655,7 +655,7 @@ function extractDirectivoCtx(text) {
   //   - Soporta hasta 4 palabras en el nombre ("María del Carmen López")
   //   - Detecta vicedirector/a y secretario/a además de director/a
   let dirty = false;
-  const nameMatch = text.match(/(?:me llamo|mi nombre es|soy)\s+([a-záéíóúüñ][a-záéíóúüñ\s]{2,60}?)(?=[.,;\n]|$|\s+(?:y\s|directora?|vicedirec|secret))/i);
+  const nameMatch = text.match(/(?:me llamo|mi nombre es|soy)\s+(?:el|la|los?\s)?\s*(?:directora?|vicedirectora?|secretari[ao]|profe(?:sora?)?|maestra?)?\s*([a-záéíóúüñ][a-záéíóúüñ\s]{2,60}?)(?=[.,;\n]|$|\s+(?:y\s|directora?|vicedirec|secret|profe|maestra?))/i);
   if (nameMatch && !directivoCtx.nombre) {
     // Capitalizar cada palabra
     const raw = nameMatch[1].trim().replace(/\s+/g,' ').slice(0,60);
@@ -689,6 +689,14 @@ function inline(s) {
           .replace(/_([^_]+)_/g,'<em>$1</em>');
 }
 function renderText(raw) {
+  // v12.3: extraer la línea [FUENTES] (la adjunta el worker, no el LLM) para renderizarla
+  // como pie destacado, no como texto suelto del documento.
+  let fuentes = '';
+  const fuentesMatch = raw.match(/\n?\[FUENTES\]\s*([^\n]+)/);
+  if (fuentesMatch) {
+    fuentes = fuentesMatch[1].trim();
+    raw = raw.replace(/\n?\[FUENTES\][^\n]*/g, '');
+  }
   const cleaned = raw
     .replace(/\[TITULO\]\s*/g,'')
     .replace(/\[SECCION\]\s*/g,'### ')
@@ -711,12 +719,18 @@ function renderText(raw) {
     else{if(ul){out.push('</ul>');ul=false;}if(ol){out.push('</ol>');ol=false;}if(e==='')flush();else buf.push(inline(e));}
   }
   flush();if(ul)out.push('</ul>');if(ol)out.push('</ol>');
+  // v12.3: pie de fuentes normativas (solo si el worker las adjuntó)
+  if (fuentes) {
+    out.push(`<div class="msg-fuentes">📚 Normativa consultada: ${esc(fuentes)}</div>`);
+  }
   return out.join('');
 }
 
 // ── Word generation ─────────────────────────────────────────────
 function parseDoc(raw) {
-  const norm=raw.replace(/^(\s*)[-•]\s+/gm,'$1[LISTA] ');
+  // v12.3: la línea [FUENTES] no es parte del documento — se extrae aparte (ver generateWord)
+  const sinFuentes = raw.replace(/\n?\[FUENTES\][^\n]*/g, '');
+  const norm=sinFuentes.replace(/^(\s*)[-•]\s+/gm,'$1[LISTA] ');
   const docs=[]; let doc=null,sec=null,sub=null,last=null;
   for (const line of norm.split('\n')) {
     const t=line.trim(); if(!t)continue;
@@ -744,6 +758,9 @@ async function generateWord(rawContent) {
   if(window._docxError) throw new Error('Librería Word no disponible. Recargá la página.');
   if(!window._docxReady) throw new Error('Librería Word cargando. Esperá unos segundos.');
   const {Document,Packer,Paragraph,TextRun,HeadingLevel,AlignmentType,LevelFormat,BorderStyle,PageBreak}=window.docx;
+  // v12.3: extraer fuentes normativas (las adjuntó el worker) para el pie del documento
+  const fuentesMatch = rawContent.match(/\[FUENTES\]\s*([^\n]+)/);
+  const fuentesText = fuentesMatch ? fuentesMatch[1].trim() : '';
   const docs=parseDoc(rawContent);
   if(!docs.length) throw new Error('Sin contenido para generar.');
   const numbering={config:[{reference:'bullets',levels:[{level:0,format:LevelFormat.BULLET,text:'•',alignment:AlignmentType.LEFT,style:{paragraph:{indent:{left:720,hanging:360}}}}]}]};
@@ -774,6 +791,11 @@ async function generateWord(rawContent) {
     children.push(new Paragraph({border:{top:{style:BorderStyle.SINGLE,size:4,color:'C5D5EF',space:1}},spacing:{after:100},children:[]}));
     children.push(new Paragraph({children:[new TextRun({text:'Observaciones:',size:20,bold:true,font:'Arial',color:'5B8DD9'})],spacing:{after:160}}));
     for(let i=0;i<3;i++) children.push(new Paragraph({border:{bottom:{style:BorderStyle.SINGLE,size:2,color:'C5D5EF',space:1}},spacing:{after:240},children:[new TextRun({text:' ',size:22})]}));
+    // v12.3: pie de fuentes normativas consultadas (dato del RAG, vía worker)
+    if(fuentesText){
+      children.push(new Paragraph({border:{top:{style:BorderStyle.SINGLE,size:2,color:'C5D5EF',space:1}},spacing:{before:120,after:60},children:[]}));
+      children.push(new Paragraph({children:[new TextRun({text:'Normativa consultada: ',size:18,bold:true,font:'Arial',color:'5B8DD9'}),new TextRun({text:fuentesText,size:18,font:'Arial',color:'5B8DD9',italics:true})],spacing:{after:80}}));
+    }
   });
   const doc=new Document({
     numbering,
@@ -921,7 +943,8 @@ function appendMessage(text, role) {
       const plain=text.replace(/\[TITULO\]\s*/g,'').replace(/\[SECCION\]\s*/g,'')
         .replace(/\[SUBSECCION\]\s*/g,'').replace(/\[CAMPO\]\s*/g,'')
         .replace(/\[TEXTO\]\s*/g,'').replace(/\[LISTA\]\s*/g,'• ')
-        .replace(/\[FIN_DOCUMENTO\]/g,'').replace(/\[SEPARADOR\]/g,'\n---\n').trim();
+        .replace(/\[FIN_DOCUMENTO\]/g,'').replace(/\[SEPARADOR\]/g,'\n---\n')
+        .replace(/\n?\[FUENTES\]\s*/g,'\n\nNormativa consultada: ').trim();
       navigator.clipboard.writeText(plain)
         .then(()=>{cp.innerHTML='✅ Copiado';setTimeout(()=>{cp.innerHTML='📋 Copiar';},2000);})
         .catch(()=>showToast('No se pudo copiar'));
@@ -938,7 +961,8 @@ function appendMessage(text, role) {
 // ── History payload ─────────────────────────────────────────────
 function historyPayload() {
   return history.slice(-HISTORY_LIMIT).map(t=>{
-    const text=t.parts[0].text; let truncated;
+    // v12.3: stripear [FUENTES] — es metadata de UI, no debe volver al LLM como contexto
+    const text=t.parts[0].text.replace(/\n?\[FUENTES\][^\n]*/g,''); let truncated;
     if(isDoc(text)){
       const tm=text.match(/\[TITULO\]\s*([^\n]+)/);
       truncated=`[TITULO] ${tm?tm[1].trim():'documento'}`;
@@ -1271,7 +1295,9 @@ const dState = { allRows: [], data: {}, selectedSchool: '' };
 function dFilteredRows() {
   const sel = dState.selectedSchool;
   if (!sel) return dState.allRows;
-  return dState.allRows.filter(r => String(r[10]||'') === sel);
+  // v12.2-fix Q2: trim para coincidir con dPopulateSchoolFilter (que trimea las claves);
+  // sin esto, una escuela con espacio final mostraba 0 resultados al filtrarla.
+  return dState.allRows.filter(r => String(r[10]||'').trim() === sel);
 }
 
 function dPopulateSchoolFilter(rows) {
@@ -1289,7 +1315,7 @@ function dPopulateSchoolFilter(rows) {
   const total = rows.length;
   sel.innerHTML = `<option value="">Todas las escuelas (${total})</option>` +
     sorted.map(e => {
-      const n = rows.filter(r => String(r[10]||'') === e).length;
+      const n = rows.filter(r => String(r[10]||'').trim() === e).length;
       return `<option value="${dEsc(e)}">${dEsc(e)} (${n})</option>`;
     }).join('');
   if (prev && escuelas.has(prev)) {
@@ -1347,7 +1373,15 @@ function dRenderKPI(rows,data) {
   const tMap={'Menos de 15 min':0.2,'30 minutos':0.5,'1 hora':1,'Más de 2 horas':2};
   let hs=0;
   rows.forEach(r=>{const t=tMap[String(r[6]||'')];if(t)hs+=t;});
-  dSet('KpiTiempo',hs>0?(hs>=100?Math.round(hs)+'hs':hs.toFixed(0)+'hs'):'—',hs>0?'estimado por encuestas':'Sin datos');
+  // M2: traducir horas a lenguaje de gestión (jornadas docentes ahorradas).
+  // 1 jornada ≈ 4hs de trabajo administrativo neto (no la jornada completa de 6hs).
+  const jornadas = hs / 4;
+  const subTiempo = hs > 0
+    ? (jornadas >= 1
+        ? `≈ ${jornadas.toFixed(jornadas >= 10 ? 0 : 1)} jornadas docentes`
+        : 'ahorro acumulado')
+    : 'Sin datos';
+  dSet('KpiTiempo', hs>0?(hs>=100?Math.round(hs)+'hs':hs.toFixed(0)+'hs'):'—', subTiempo);
 }
 
 function dRenderChips(rows) {
@@ -1407,7 +1441,10 @@ function dRenderStars(rows) {
 
 function dRenderTimeline(rows) {
   const days=14,now=new Date(),buckets={};
-  for(let i=0;i<days;i++){const d=new Date(now);d.setDate(d.getDate()-(days-1-i));buckets[d.toLocaleDateString('es-AR')]=0;}
+  // v12.2-fix C1: el Sheet serializa fechas como dd/MM/yyyy (con ceros), no como
+  // toLocaleDateString('es-AR') (sin ceros) → antes nunca matcheaba y el timeline quedaba vacío.
+  const fmt=d=>String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+d.getFullYear();
+  for(let i=0;i<days;i++){const d=new Date(now);d.setDate(d.getDate()-(days-1-i));buckets[fmt(d)]=0;}
   rows.forEach(r=>{const k=String(r[0]||'');if(k in buckets)buckets[k]++;});
   const vals=Object.values(buckets),maxV=Math.max(...vals,1),keys=Object.keys(buckets);
   $('dTlBars').innerHTML=vals.map((v,i)=>`<div class="d-tl-bar" style="height:${Math.max(3,Math.round(v/maxV*68))}px;opacity:${(0.4+0.6*v/maxV).toFixed(2)}" title="${keys[i]}: ${v}"></div>`).join('');
