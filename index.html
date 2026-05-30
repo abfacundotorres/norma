@@ -569,9 +569,22 @@
       <button class="chip" onclick="setFlow('actas'); sendSuggestion('Necesito hacer un acta de reunión','Acta de reunión')">Acta de reunión 📄</button>
       <button class="chip" onclick="setFlow('comunicados'); sendSuggestion('Necesito hacer un comunicado','Comunicado')">Comunicado 📢</button>
       <button class="chip" onclick="setFlow('proyectos'); sendSuggestion('Necesito armar un proyecto institucional','Proyecto institucional')">Proyecto institucional 🏫</button>
+      <button class="chip" onclick="showPeiMenu()">Asistente PEI 🗂️</button>
       <button class="chip" onclick="setFlow('licencias'); sendSuggestion('Necesito gestionar una licencia docente','Licencias docentes')">Licencias docentes 📋</button>
       <button class="chip" onclick="setFlow('disciplina'); sendSuggestion('Necesito gestionar una situación disciplinaria con un docente','Disciplina docente')">Disciplina docente ⚖️</button>
       <button class="chip" onclick="setFlow('general'); sendSuggestion('Tengo una consulta de gestión','Consulta de gestión')">Consulta de gestión 💬</button>
+    </div>
+
+    <!-- v12.4: sub-menú de secciones del PEI. Oculto por default; lo muestra showPeiMenu().
+         Hardcodeado con las 5 secciones del MVP. Si en el futuro se suman secciones en el worker,
+         se puede rehidratar via endpoint _pei_sections (no se hace todavía: anti-overengineering). -->
+    <div class="suggestions" id="peiSubmenu" style="display:none;">
+      <button class="chip" onclick="hidePeiMenu()">← Volver</button>
+      <button class="chip" onclick="selectPeiSection('identidad','Identidad institucional')">Identidad 🏛️</button>
+      <button class="chip" onclick="selectPeiSection('fundamentacion','Fundamentación pedagógica')">Fundamentación 📚</button>
+      <button class="chip" onclick="selectPeiSection('objetivos','Objetivos institucionales')">Objetivos 🎯</button>
+      <button class="chip" onclick="selectPeiSection('perfiles','Perfiles deseados')">Perfiles 👥</button>
+      <button class="chip" onclick="selectPeiSection('ideario','Ideario')">Ideario 💭</button>
     </div>
 
     <div class="typing-row" id="typingRow">
@@ -659,6 +672,7 @@ let sessionPin   = null;
 let sessionSchool = '';  // v12.2: nombre de escuela (devuelto por _ping)
 let dashboardPin = '';
 let activeFlow   = 'general';
+let activePeiSection = null;  // v12.4: si flow=='pei', cuál sección; si no, null
 let directivoCtx = { nombre: '', cargo: '' };
 let surveyRating = 0;
 let surveyUso = '';
@@ -1022,7 +1036,7 @@ async function fetchMsg(message, attempt=0) {
   try {
     const res=await fetch(WORKER_URL,{
       method:'POST', headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({message,history:historyPayload(),pin:sessionPin,flow:activeFlow,ctx:directivoCtx,chip_usado:sessionChip,session_id:SESSION_ID}),
+      body:JSON.stringify({message,history:historyPayload(),pin:sessionPin,flow:activeFlow,pei_section:activePeiSection,ctx:directivoCtx,chip_usado:sessionChip,session_id:SESSION_ID}),
       signal:ctrl.signal,
     });
     clearTimeout(tmout);
@@ -1064,6 +1078,7 @@ async function sendMessage(text) {
     comunicados: 'Redactando el comunicado…',
     licencias:   'Consultando la normativa…',
     resumen:     'Generando el resumen…',
+    pei:         'Trabajando en la sección…',
   };
   if(loadMsgs[activeFlow]) loadTimer=setTimeout(()=>showToast(loadMsgs[activeFlow],8000),6000);
   const pending={role:'user',parts:[{text}]};
@@ -1089,11 +1104,50 @@ async function sendMessage(text) {
 
 // ── UI ──────────────────────────────────────────────────────────
 function showToast(m,dur=3500){clearTimeout(toastTimer);const t=$('toast');t.textContent=m;t.classList.add('show');toastTimer=setTimeout(()=>t.classList.remove('show'),dur);}
-function setChips(d){sug?.querySelectorAll('.chip').forEach(c=>{c.disabled=d;});}
+function setChips(d){
+  // v12.4: afecta chips de ambas barras (principal + submenú PEI).
+  // Sin esto, el directivo podría tapear "← Volver" o cambiar de sección mientras
+  // Norma todavía está respondiendo, generando estado inconsistente.
+  document.querySelectorAll('#suggestions .chip, #peiSubmenu .chip').forEach(c=>{c.disabled=d;});
+}
 function autoResize(){inp.style.height='auto';inp.style.height=Math.min(inp.scrollHeight,110)+'px';}
 function updateChar(){const left=MAX_CHARS-inp.value.length,el=$('charCount');el.textContent=left>300?'':`${left} caracteres restantes`;el.className='char-count'+(left<=300?left<50?' limit':' warn':'');btn.disabled=inp.value.trim().length===0||isLoading;}
 function setStatus(online){$('statusBadge').className=`status-badge ${online?'online':'offline'}`;$('statusText').textContent=online?'En línea':'Sin conexión';$('offlineBanner').classList.toggle('visible',!online);}
-function setFlow(f){activeFlow=f;}
+function setFlow(f){
+  activeFlow=f;
+  // v12.4: si pasamos a un flow distinto de 'pei', limpiamos la sección activa.
+  // Solo selectPeiSection() la setea explícitamente.
+  if (f !== 'pei') activePeiSection = null;
+}
+
+// ── PEI sub-menú (v12.4) ────────────────────────────────────────
+// Chip "Asistente PEI" — coexiste con "Proyecto institucional" (flows distintos:
+// PEI = documento marco institucional; Proyecto = proyectos específicos dentro del PEI).
+// El usuario tapea "Asistente PEI", se le muestra el sub-menú de 5 secciones, elige una,
+// y arranca la sesión con flow='pei' + pei_section='X'. Una sesión = una sección.
+// Sin estado entre secciones.
+function showPeiMenu(){
+  if(isLoading) return;
+  $('suggestions').style.display = 'none';
+  $('peiSubmenu').style.display = 'flex';
+}
+function hidePeiMenu(){
+  $('peiSubmenu').style.display = 'none';
+  $('suggestions').style.display = 'flex';
+}
+function selectPeiSection(sectionId, sectionDisplayName){
+  if(isLoading) return;
+  activeFlow = 'pei';
+  activePeiSection = sectionId;
+  $('peiSubmenu').style.display = 'none';
+  $('suggestions').style.display = 'flex';  // v12.4 fix: restaurar chips principales para que el directivo pueda cambiar de flow o de sección sin quedar atrapado
+  // El chip_usado granular por sección permite que el dashboard distinga
+  // sin tocar el AppScript (que ya guarda chip_usado tal cual lo recibe).
+  sendSuggestion(
+    `Necesito ayuda con la sección "${sectionDisplayName}" del PEI`,
+    `pei_${sectionId}`
+  );
+}
 
 function sendSuggestion(text, chip){
   if(isLoading)return; if(sug)sug.style.display='none';
@@ -1106,7 +1160,7 @@ function handleSend(){const text=inp.value.trim();if(!text||isLoading)return;inp
 
 function resetChat(){
   if(isLoading)return;
-  history=[]; activeFlow='general';
+  history=[]; activeFlow='general'; activePeiSection=null;
   // v12.2: en lugar de borrar directivoCtx, lo recargamos del storage si existe.
   // El usuario no debería tener que repetir su nombre/cargo en cada consulta nueva.
   directivoCtx = { nombre: '', cargo: '' };
@@ -1128,6 +1182,7 @@ function resetChat(){
   messageCount=0; $('resumeBtn').classList.remove('visible');
   msg.querySelectorAll('.msg-row').forEach((r,i)=>{if(i>0)r.remove();});
   if(sug)sug.style.display='flex';
+  $('peiSubmenu').style.display='none';  // v12.4: cerrar submenú PEI si estaba abierto
   inp.value=''; autoResize(); updateChar();
   showToast('Nueva consulta iniciada.');
 }
@@ -1141,7 +1196,7 @@ function logout(){
   // Borrar el contexto persistido del PIN actual
   try { if(sessionPin) localStorage.removeItem(DIRECTIVO_STORAGE_KEY(sessionPin)); } catch {}
   // Resetear todo el estado de sesión en memoria
-  history=[]; activeFlow='general';
+  history=[]; activeFlow='general'; activePeiSection=null;
   directivoCtx={ nombre:'', cargo:'' };
   sessionPin=null; sessionSchool=''; sessionChip='';
   surveyShown=false; messageCount=0;
