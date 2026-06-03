@@ -678,6 +678,11 @@ const CLIENT_TMOUT  = 33000;
 const HISTORY_LIMIT = 16;
 const RESUME_THRESHOLD = 4; // mensajes mínimos para mostrar botón resumen
 const SURVEY_THRESHOLD  = 5; // mensajes para mostrar botón encuesta flotante
+// Seguridad: timeout de sesión por inactividad. Pensado para computadoras compartidas
+// en escuelas — si el directivo se aleja sin hacer logout, la sesión se cierra sola.
+// No borra el localStorage del PIN (eso es decisión explícita vía logout); solo cierra
+// la sesión activa en memoria y vuelve a la pantalla de PIN.
+const SESSION_IDLE_MS = 15 * 60 * 1000; // 15 minutos sin actividad
 
 // ── State ───────────────────────────────────────────────────────
 let history      = [];
@@ -696,6 +701,7 @@ let messageCount = 0;
 let surveyShown   = false;
 let surveyDismissed = false;  // #7: el usuario cerró la encuesta a propósito → no re-mostrar en la sesión
 let sessionChip   = '';  // chip que usó el usuario para iniciar
+let idleTimer     = null; // timer de expiración de sesión por inactividad
 
 // v12.2: clave de localStorage para persistir directivoCtx por sessionPin.
 // Cada PIN tiene su propio nombre/cargo guardado, así no se mezclan entre directivos.
@@ -1056,9 +1062,9 @@ function historyPayload() {
       const tm=text.match(/\[TITULO\]\s*([^\n]+)/);
       truncated=`[TITULO] ${tm?tm[1].trim():'documento'}`;
     } else {
-      // #12: el input permite hasta MAX_CHARS (2000); truncar a 1000 mutilaba textos largos
-      // pegados por el usuario en la 2da vuelta. Se alinea con el límite real del input.
-      truncated=t.role==='user'?text.slice(0,2000):text.replace(/\[TITULO\][\s\S]*$/,'').trim().slice(0,1500);
+      // El worker re-trunca el history a 1000 chars por turno (sanitizeHistory), así que
+      // mandar más desde el cliente solo desperdicia ancho de banda. Alineado con el server.
+      truncated=t.role==='user'?text.slice(0,1000):text.replace(/\[TITULO\][\s\S]*$/,'').trim().slice(0,1500);
     }
     return {role:t.role,parts:[{text:truncated}]};
   });
@@ -1098,6 +1104,7 @@ async function fetchMsg(message, attempt=0) {
 // ── sendMessage ─────────────────────────────────────────────────
 async function sendMessage(text, isSystem=false) {
   if(!text.trim()||isLoading) return;
+  resetIdleTimer();  // seguridad: actividad del usuario reinicia el timeout
   isLoading=true; btn.disabled=true; setChips(true);
   $('resumeBtn').classList.remove('visible');
   $('surveyFloatBtn').classList.remove('visible');  // #2: ocultar encuesta durante loading
@@ -1223,6 +1230,35 @@ function resetChat(){
   showToast('Nueva consulta iniciada.');
 }
 
+// ── Seguridad: expiración de sesión por inactividad ─────────────
+// Cierra la sesión activa (en memoria) tras SESSION_IDLE_MS sin actividad.
+// A diferencia de logout(): no pide confirmación y NO borra el localStorage del PIN
+// (el nombre/cargo persistido se conserva para el próximo login legítimo del mismo PIN).
+// El objetivo es la compu compartida: que un tercero no continúe una sesión abandonada.
+function resetIdleTimer(){
+  if(idleTimer) clearTimeout(idleTimer);
+  // Solo cuenta si hay una sesión de directivo activa (no en pantalla de PIN ni dashboard)
+  if(!sessionPin) return;
+  idleTimer = setTimeout(expireSession, SESSION_IDLE_MS);
+}
+
+function expireSession(){
+  if(!sessionPin) return; // ya cerrada
+  if(idleTimer){ clearTimeout(idleTimer); idleTimer = null; }
+  // Resetear estado en memoria (NO toca localStorage del PIN)
+  history=[]; activeFlow='general'; activePeiSection=null;
+  directivoCtx={ nombre:'', cargo:'' };
+  sessionPin=null; sessionSchool=''; sessionChip='';
+  surveyShown=false; surveyDismissed=false; messageCount=0;
+  msg.querySelectorAll('.msg-row').forEach(r=>{if(r.id!=='welcomeMsg')r.remove();});
+  $('headerSub').textContent='Asistente de gestión · Directivos · Primaria Córdoba';
+  $('resumeBtn').classList.remove('visible');
+  $('surveyFloatBtn').classList.remove('visible');
+  $('mainPage').style.display='none';
+  $('pinScreen').style.display='flex';
+  $('pinInput').value=''; $('pinError').textContent='Tu sesión se cerró por inactividad. Ingresá tu código de nuevo.';
+}
+
 // v12.3 (Medida 4): logout — borra los datos del directivo de ESTE dispositivo y vuelve al PIN.
 // Pensado para computadoras compartidas en la escuela: el próximo usuario no ve tu nombre/cargo
 // ni puede continuar tu sesión. Pide confirmación porque borra el contexto persistido.
@@ -1232,6 +1268,7 @@ function logout(){
   // Borrar el contexto persistido del PIN actual
   try { if(sessionPin) localStorage.removeItem(DIRECTIVO_STORAGE_KEY(sessionPin)); } catch {}
   // Resetear todo el estado de sesión en memoria
+  if(idleTimer){ clearTimeout(idleTimer); idleTimer=null; }  // seguridad: cancelar timeout
   history=[]; activeFlow='general'; activePeiSection=null;
   directivoCtx={ nombre:'', cargo:'' };
   sessionPin=null; sessionSchool=''; sessionChip='';
@@ -1294,6 +1331,7 @@ async function submitPin() {
       $('mainPage').style.display='flex';
       showOnboarding();
       focusInput();
+      resetIdleTimer();  // seguridad: arrancar el timeout de sesión
     }
   } catch {
     pe.textContent='Sin conexión. Revisá tu internet e intentá de nuevo.';
@@ -1312,7 +1350,7 @@ $('surveyModal').addEventListener('click',e=>{if(e.target===$('surveyModal'))dis
 // ── Events ───────────────────────────────────────────────────────
 btn.addEventListener('click',handleSend);
 inp.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();handleSend();}});
-inp.addEventListener('input',()=>{autoResize();updateChar();});
+inp.addEventListener('input',()=>{autoResize();updateChar();resetIdleTimer();});
 // Se eliminó el handler de focus que reescribía el meta viewport: era redundante
 // (reescribía exactamente lo que ya está en el <meta>) y no aportaba nada.
 window.addEventListener('online',()=>setStatus(true));
