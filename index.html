@@ -3,6 +3,9 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<!-- user-scalable=no es intencional: la .page usa position:fixed;inset:0 (app full-screen).
+     El auto-zoom de iOS al enfocar el input se neutraliza con font-size:16px en mobile (ver CSS),
+     no bloqueando el zoom acá. Se eliminó el handler JS que reescribía este meta en focus (redundante). -->
 <meta name="description" content="Norma — Asistente de gestión institucional para directivos de primaria en Córdoba">
 <meta name="theme-color" content="#2B5BA8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src https://i.imgur.com data:; connect-src https://norma-aulaclara.abfacundotorres.workers.dev;">
@@ -111,6 +114,11 @@
   .input-wrap { display: flex; gap: 8px; align-items: flex-end; background: var(--warm-white); border: 1.5px solid var(--border); border-radius: 24px; padding: 8px 8px 8px 16px; transition: border-color 0.2s; }
   .input-wrap:focus-within { border-color: var(--orange); }
   #userInput { flex: 1; border: none; outline: none; background: transparent; font-family: 'DM Sans', system-ui, sans-serif; font-size: 14px; color: var(--brown-dark); resize: none; min-height: 22px; max-height: 110px; line-height: 1.5; padding: 2px 0; }
+  /* 16px en mobile neutraliza el auto-zoom de iOS al enfocar el input.
+     Complementa user-scalable=no (no lo sustituye). */
+  @media (max-width: 900px) {
+    #userInput { font-size: 16px; }
+  }
   #userInput::placeholder { color: var(--brown-light); opacity: 0.55; }
   .input-footer { display: flex; justify-content: flex-end; padding: 3px 6px 0; }
   .char-count { font-size: 10px; color: var(--brown-light); opacity: 0.5; transition: color 0.2s, opacity 0.2s; }
@@ -171,6 +179,13 @@
     color: #FFF8F0;
   }
   #surveyFloatBtn:hover { background: var(--orange-hover); box-shadow: 0 5px 20px rgba(43,91,168,0.32); }
+  /* Mobile: los botones flotantes deben quedar por encima del input-area (que ocupa ~90-100px
+     desde el fondo). En desktop el bottom fijo es suficiente; en mobile hay que subirlos. */
+  @media (max-width: 900px) {
+    #surveyFloatBtn { bottom: 132px; }
+    #resumeBtn      { bottom: 184px; }
+    .toast          { bottom: 100px; }
+  }
 
   /* ── Modal encuesta ── */
   .modal-overlay {
@@ -503,7 +518,7 @@
         <button class="uso-btn" data-v="no" onclick="setUso('no')">❌ No me sirvió</button>
       </div>
       <div class="modal-actions">
-        <button class="modal-btn secondary" onclick="closeModal()">Omitir</button>
+        <button class="modal-btn secondary" onclick="dismissSurvey()">Omitir</button>
         <button class="modal-btn primary" id="surveySubmitBtn" onclick="submitSurvey()" disabled>Enviar</button>
       </div>
     </div>
@@ -552,7 +567,7 @@
   <div class="offline-banner" id="offlineBanner" role="alert">Sin conexión a internet. Revisá tu red para continuar.</div>
 
   <main class="messages" id="messages" role="log" aria-live="polite">
-    <div class="msg-row bot">
+    <div class="msg-row bot" id="welcomeMsg">
       <div class="msg-avatar">
         <img src="https://i.imgur.com/PTiJ7tK.jpeg" alt=""
              onerror="this.style.display='none'; this.parentNode.textContent='👩‍🏫';">
@@ -679,6 +694,7 @@ let surveyUso = '';
 let lastDocTitle = '';
 let messageCount = 0;
 let surveyShown   = false;
+let surveyDismissed = false;  // #7: el usuario cerró la encuesta a propósito → no re-mostrar en la sesión
 let sessionChip   = '';  // chip que usó el usuario para iniciar
 
 // v12.2: clave de localStorage para persistir directivoCtx por sessionPin.
@@ -863,15 +879,22 @@ async function generateWord(rawContent) {
 }
 
 // ── Encuesta ────────────────────────────────────────────────────
+// #6 fix: el submit requiere AMBOS — estrellas y "uso". Antes setStar habilitaba
+// el botón solo, dejando enviar la encuesta sin elegir "uso" (uso:'' contaminaba el dashboard).
+function checkSurveyReady() {
+  $('surveySubmitBtn').disabled = !(surveyRating && surveyUso);
+}
+
 function setStar(n) {
   surveyRating = n;
   document.querySelectorAll('.star').forEach((s,i) => s.classList.toggle('active', i < n));
-  $('surveySubmitBtn').disabled = false;
+  checkSurveyReady();
 }
 
 function setUso(v) {
   surveyUso = v;
   document.querySelectorAll('.uso-btn').forEach(b => b.classList.toggle('active', b.dataset.v === v));
+  checkSurveyReady();
 }
 
 function openModal(docTitle) {
@@ -888,13 +911,20 @@ function openModal(docTitle) {
 
 function closeModal() {
   $('surveyModal').classList.remove('visible');
-  // Solo volver a mostrar si NO completó la encuesta
-  if (!surveyShown && messageCount >= SURVEY_THRESHOLD) {
+  // Solo volver a mostrar si NO completó y NO la cerró a propósito (#7)
+  if (!surveyShown && !surveyDismissed && messageCount >= SURVEY_THRESHOLD) {
     setTimeout(() => {
       $('surveyFloatBtn').style.display = ''; // restaurar display
       $('surveyFloatBtn').classList.add('visible');
     }, 3000);
   }
+}
+
+// #7: cierre iniciado por el usuario (Omitir / Escape / click-fuera). Marca dismissed
+// para que el botón flotante no reaparezca a los 3s — cerrar significa "ahora no".
+function dismissSurvey() {
+  surveyDismissed = true;
+  closeModal();
 }
 
 // v12.3: modal de privacidad (accesible desde el footer)
@@ -909,6 +939,7 @@ function closePrivacyModal() {
 
 async function submitSurvey() {
   const btn = $('surveySubmitBtn');
+  if (btn.disabled) return;  // #10: guard anti doble-tap (el disabled async no alcanza)
   btn.disabled = true; btn.textContent = 'Enviando…';
   try {
     await fetch(WORKER_URL, {
@@ -940,18 +971,19 @@ async function submitSurvey() {
 // ── Botón resumen ───────────────────────────────────────────────
 function updateResumeBtn() {
   const showResume = messageCount >= RESUME_THRESHOLD && !isLoading;
-  const showSurvey = messageCount >= SURVEY_THRESHOLD && !surveyShown && !isLoading;
+  const showSurvey = messageCount >= SURVEY_THRESHOLD && !surveyShown && !surveyDismissed && !isLoading;
   // Ambos independientes — resumen siempre visible si hay suficientes mensajes,
-  // encuesta aparece una sola vez por sesión
+  // encuesta aparece una sola vez por sesión (salvo dismiss explícito, #7)
   $('resumeBtn').classList.toggle('visible', showResume);
-  if (showSurvey) $('surveyFloatBtn').classList.add('visible');
+  // #2: toggle en vez de solo add, para que se oculte durante loading igual que resumeBtn
+  if (!surveyShown) $('surveyFloatBtn').classList.toggle('visible', showSurvey);
 }
 
 async function triggerResumen() {
   if(isLoading) return;
   const prevFlow = activeFlow;
   activeFlow = 'resumen';
-  await sendMessage('Generá un resumen de esta consulta');
+  await sendMessage('Generá un resumen de esta consulta', true);
   activeFlow = prevFlow;
 }
 
@@ -1024,7 +1056,9 @@ function historyPayload() {
       const tm=text.match(/\[TITULO\]\s*([^\n]+)/);
       truncated=`[TITULO] ${tm?tm[1].trim():'documento'}`;
     } else {
-      truncated=t.role==='user'?text.slice(0,1000):text.replace(/\[TITULO\][\s\S]*$/,'').trim().slice(0,1500);
+      // #12: el input permite hasta MAX_CHARS (2000); truncar a 1000 mutilaba textos largos
+      // pegados por el usuario en la 2da vuelta. Se alinea con el límite real del input.
+      truncated=t.role==='user'?text.slice(0,2000):text.replace(/\[TITULO\][\s\S]*$/,'').trim().slice(0,1500);
     }
     return {role:t.role,parts:[{text:truncated}]};
   });
@@ -1062,11 +1096,12 @@ async function fetchMsg(message, attempt=0) {
 }
 
 // ── sendMessage ─────────────────────────────────────────────────
-async function sendMessage(text) {
+async function sendMessage(text, isSystem=false) {
   if(!text.trim()||isLoading) return;
   isLoading=true; btn.disabled=true; setChips(true);
   $('resumeBtn').classList.remove('visible');
-  extractDirectivoCtx(text);
+  $('surveyFloatBtn').classList.remove('visible');  // #2: ocultar encuesta durante loading
+  if(!isSystem) extractDirectivoCtx(text);  // #8: no extraer contexto de mensajes de sistema (ej: resumen)
   appendMessage(text,'user');
   $('typingRow').classList.add('visible');
   msg.scrollTop=msg.scrollHeight;
@@ -1151,7 +1186,8 @@ function selectPeiSection(sectionId, sectionDisplayName){
 
 function sendSuggestion(text, chip){
   if(isLoading)return; if(sug)sug.style.display='none';
-  directivoCtx.cargo='';
+  // #9: NO borrar directivoCtx.cargo — contradice la persistencia de v12.2.
+  // El cargo solo se setea desde extractDirectivoCtx o desde localStorage.
   sessionChip = chip || '';
   inp.value=text; autoResize(); updateChar(); handleSend();
 }
@@ -1176,11 +1212,11 @@ function resetChat(){
       }
     } catch {}
   }
-  surveyShown=false; sessionChip='';
+  surveyShown=false; surveyDismissed=false; sessionChip='';
   $('surveyFloatBtn').style.display='';
   $('surveyFloatBtn').classList.remove('visible');
   messageCount=0; $('resumeBtn').classList.remove('visible');
-  msg.querySelectorAll('.msg-row').forEach((r,i)=>{if(i>0)r.remove();});
+  msg.querySelectorAll('.msg-row').forEach(r=>{if(r.id!=='welcomeMsg')r.remove();});  // #13: por id, no por índice
   if(sug)sug.style.display='flex';
   $('peiSubmenu').style.display='none';  // v12.4: cerrar submenú PEI si estaba abierto
   inp.value=''; autoResize(); updateChar();
@@ -1199,9 +1235,9 @@ function logout(){
   history=[]; activeFlow='general'; activePeiSection=null;
   directivoCtx={ nombre:'', cargo:'' };
   sessionPin=null; sessionSchool=''; sessionChip='';
-  surveyShown=false; messageCount=0;
+  surveyShown=false; surveyDismissed=false; messageCount=0;
   // Limpiar UI
-  msg.querySelectorAll('.msg-row').forEach((r,i)=>{if(i>0)r.remove();});
+  msg.querySelectorAll('.msg-row').forEach(r=>{if(r.id!=='welcomeMsg')r.remove();});  // #13: por id, no por índice
   $('headerSub').textContent='Asistente de gestión · Directivos · Primaria Córdoba';
   // Volver a la pantalla de PIN
   $('mainPage').style.display='none';
@@ -1223,6 +1259,10 @@ async function submitPin() {
       body:JSON.stringify({_ping:true,pin}),
     });
     const data=await res.json().catch(()=>({}));
+    if(res.status===429){  // #14: rate-limit del worker — antes caía en el mensaje genérico
+      pe.textContent=data.error||'Demasiados intentos. Esperá un minuto antes de reintentar.';
+      pi.focus(); return;
+    }
     if(!res.ok||!data.ok){
       pe.textContent=data.error||'Código incorrecto. Revisá e intentá de nuevo.';
       pi.focus(); return;
@@ -1266,17 +1306,15 @@ $('pinInput').addEventListener('focus',function(){this.style.borderColor='var(--
 $('pinInput').addEventListener('blur',function(){this.style.borderColor='var(--border)';});
 
 // ── Modal keyboard close ─────────────────────────────────────────
-document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeModal();closePrivacyModal();}});
-$('surveyModal').addEventListener('click',e=>{if(e.target===$('surveyModal'))closeModal();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){if($('surveyModal').classList.contains('visible'))dismissSurvey();closePrivacyModal();}});
+$('surveyModal').addEventListener('click',e=>{if(e.target===$('surveyModal'))dismissSurvey();});
 
 // ── Events ───────────────────────────────────────────────────────
 btn.addEventListener('click',handleSend);
 inp.addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();handleSend();}});
 inp.addEventListener('input',()=>{autoResize();updateChar();});
-inp.addEventListener('focus',()=>{
-  document.querySelector('meta[name=viewport]')
-    .setAttribute('content','width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no');
-});
+// Se eliminó el handler de focus que reescribía el meta viewport: era redundante
+// (reescribía exactamente lo que ya está en el <meta>) y no aportaba nada.
 window.addEventListener('online',()=>setStatus(true));
 window.addEventListener('offline',()=>setStatus(false));
 setStatus(navigator.onLine);
