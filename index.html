@@ -675,7 +675,7 @@ const MAX_CHARS     = 2000;
 const MAX_RETRY     = 2;
 const RETRY_BASE    = 1200;
 const CLIENT_TMOUT  = 33000;
-const HISTORY_LIMIT = 16;
+const HISTORY_LIMIT = 10; // alineado con el worker (sanitizeHistory corta a 10); enviar más desperdicia payload
 const RESUME_THRESHOLD = 4; // mensajes mínimos para mostrar botón resumen
 const SURVEY_THRESHOLD  = 5; // mensajes para mostrar botón encuesta flotante
 // Seguridad: timeout de sesión por inactividad. Pensado para computadoras compartidas
