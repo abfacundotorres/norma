@@ -120,6 +120,10 @@
     #userInput { font-size: 16px; }
   }
   #userInput::placeholder { color: var(--brown-light); opacity: 0.55; }
+  /* Q7: pinError es rojo por defecto (error de PIN), pero neutro cuando es un aviso
+     normal como la expiración de sesión — que no es un fallo del usuario. */
+  #pinError { color: var(--red); }
+  #pinError.notice { color: var(--brown-light); }
   .input-footer { display: flex; justify-content: flex-end; padding: 3px 6px 0; }
   .char-count { font-size: 10px; color: var(--brown-light); opacity: 0.5; transition: color 0.2s, opacity 0.2s; }
   .char-count.warn  { color: #B45309; opacity: 0.9; }
@@ -540,7 +544,7 @@
     <input id="pinInput" type="text" placeholder="Ej: JESUSMARIA2026"
       maxlength="20" autocomplete="off" spellcheck="false"
       style="width:100%;padding:12px 16px;border:1.5px solid var(--border);border-radius:14px;font-size:15px;font-family:'DM Sans',system-ui,sans-serif;text-align:center;text-transform:uppercase;letter-spacing:2px;background:var(--cream);color:var(--brown-dark);outline:none;transition:border-color 0.2s;margin-bottom:8px;">
-    <div id="pinError" style="font-size:12px;color:var(--red);min-height:18px;margin-bottom:12px;"></div>
+    <div id="pinError" style="font-size:12px;min-height:18px;margin-bottom:12px;"></div>
     <button id="pinBtn" onclick="submitPin()" style="width:100%;padding:13px;background:var(--orange);color:#FFF8F0;border:none;border-radius:14px;font-size:15px;font-weight:500;font-family:'DM Sans',system-ui,sans-serif;cursor:pointer;transition:background 0.15s;">Ingresar</button>
     <div style="font-size:11px;color:var(--brown-light);opacity:0.5;margin-top:16px;">Si no tenés código, contactá a tu institución.</div>
   </div>
@@ -1256,7 +1260,10 @@ function expireSession(){
   $('surveyFloatBtn').classList.remove('visible');
   $('mainPage').style.display='none';
   $('pinScreen').style.display='flex';
-  $('pinInput').value=''; $('pinError').textContent='Tu sesión se cerró por inactividad. Ingresá tu código de nuevo.';
+  $('pinInput').value='';
+  const pe=$('pinError');
+  pe.classList.add('notice');  // Q7: aviso neutro, no error rojo — la sesión expiró, no es culpa del usuario
+  pe.textContent='Tu sesión se cerró por inactividad. Ingresá tu código de nuevo.';
 }
 
 // v12.3 (Medida 4): logout — borra los datos del directivo de ESTE dispositivo y vuelve al PIN.
@@ -1279,11 +1286,12 @@ function logout(){
   // Volver a la pantalla de PIN
   $('mainPage').style.display='none';
   $('pinScreen').style.display='flex';
-  $('pinInput').value=''; $('pinError').textContent='';
+  $('pinInput').value=''; $('pinError').textContent=''; $('pinError').classList.remove('notice');
   $('pinInput').focus();
 }
 async function submitPin() {
   const pi=$('pinInput'), pe=$('pinError'), pb=$('pinBtn');
+  pe.classList.remove('notice');  // Q7: a partir de un intento, todo mensaje es error → rojo
   const pin=pi.value.trim().toUpperCase();
   if(!pin||pin.length<4){pe.textContent='Ingresá un código válido.';pi.focus();return;}
 
