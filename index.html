@@ -85,6 +85,9 @@
   .bubble { padding: 10px 15px; border-radius: 18px; font-size: 14px; line-height: 1.65; word-break: break-word; }
   .msg-row.bot .bubble { background: var(--warm-white); border: 1px solid var(--border); color: var(--brown-dark); border-bottom-left-radius: 5px; }
   .msg-row.user .bubble { background: var(--orange); color: #FFF8F0; border-bottom-right-radius: 5px; }
+  /* Q8: documento generado — borde y fondo sutiles que lo separan del chat conversacional. */
+  .msg-row.bot .bubble.bubble-doc { background: var(--amber-pale); border: 1px solid var(--brown-light); border-left: 3px solid var(--brown-mid); }
+  .doc-header { font-size: 11px; font-weight: 600; color: var(--brown-mid); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 1px dashed var(--border); }
   .bubble strong { font-weight: 500; }
   .bubble em { font-style: italic; opacity: 0.85; }
   .bubble p { margin: 0 0 6px; }
@@ -723,27 +726,59 @@ function isDoc(t) {
 }
 
 function extractDirectivoCtx(text) {
-  // v12.2 (Q1): regex más permisivo
-  //   - Acepta minúsculas (la gente escribe "me llamo maría")
-  //   - Soporta hasta 4 palabras en el nombre ("María del Carmen López")
-  //   - Detecta vicedirector/a y secretario/a además de director/a
+  // Q6 (v12.6): extracción endurecida. La versión previa generaba datos sucios que terminaban
+  // en documentos oficiales: capturaba "soy nueva en el cargo" como nombre, y se autoasignaba
+  // un cargo ante CUALQUIER mención de la palabra ("el acta es para la vicedirectora" → cargo).
+  // Ahora: (1) el nombre se valida contra stopwords y debe parecer nombre propio; (2) el cargo
+  // solo se asigna en construcción de primera persona ("soy/somos la directora"), no de pasada.
   let dirty = false;
-  const nameMatch = text.match(/(?:me llamo|mi nombre es|soy)\s+(?:el|la|los?\s)?\s*(?:directora?|vicedirectora?|secretari[ao]|profe(?:sora?)?|maestra?)?\s*([a-záéíóúüñ][a-záéíóúüñ\s]{2,60}?)(?=[.,;\n]|$|\s+(?:y\s|directora?|vicedirec|secret|profe|maestra?))/i);
+
+  // Palabras que NO son nombres aunque aparezcan tras "soy/me llamo". Si la captura empieza
+  // con una de estas, se descarta (era una frase descriptiva, no una presentación).
+  const STOPWORDS = new Set([
+    'nueva','nuevo','la','el','una','un','responsable','encargada','encargado','parte',
+    'docente','maestra','maestro','profe','profesora','profesor','suplente','interina',
+    'interino','titular','de','del','muy','bastante','medio','re','algo','recien','recién',
+    'directora','director','vicedirectora','vicedirector','secretaria','secretario',
+    'y','me','mi','llamo','nombre','es','que','soy','somos',
+  ]);
+
+  // Prioridad 1: presentación explícita ("me llamo X" / "mi nombre es X"). Más confiable.
+  // Prioridad 2: "soy [cargo] X". El orden importa: en "soy la vicedirectora y me llamo Ana",
+  // la presentación explícita gana y captura "Ana", no "y me llamo Ana".
+  let nameMatch = text.match(/(?:me llamo|mi nombre es)\s+(?:el|la\s)?\s*([a-záéíóúüñ][a-záéíóúüñ\s]{2,60}?)(?=[.,;\n]|$|\s+(?:y\s|que\s|soy\s))/i);
+  if (!nameMatch) {
+    nameMatch = text.match(/\bsoy\s+(?:el|la|los?\s)?\s*(?:directora?|vicedirectora?|secretari[ao]|profe(?:sora?)?|maestra?)?\s+([a-záéíóúüñ][a-záéíóúüñ\s]{2,60}?)(?=[.,;\n]|$|\s+(?:y\s|directora?|vicedirec|secret|profe|maestra?))/i);
+  }
   if (nameMatch && !directivoCtx.nombre) {
-    // Capitalizar cada palabra
     const raw = nameMatch[1].trim().replace(/\s+/g,' ').slice(0,60);
-    const capitalized = raw.split(' ').slice(0,4).map(w =>
-      w.length > 2 ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : w.toLowerCase()
-    ).join(' ');
-    directivoCtx.nombre = capitalized;
-    dirty = true;
+    const words = raw.split(' ').slice(0,4);
+    const firstWord = words[0]?.toLowerCase();
+    // Validar: la primera palabra no puede ser stopword, y todas deben ser alfabéticas
+    // (sin números ni símbolos). Esto descarta "nueva en el cargo", "la responsable", etc.
+    const looksLikeName = firstWord && !STOPWORDS.has(firstWord)
+      && words.every(w => /^[a-záéíóúüñ]+$/i.test(w));
+    if (looksLikeName) {
+      const capitalized = words.map(w =>
+        w.length > 2 ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : w.toLowerCase()
+      ).join(' ');
+      directivoCtx.nombre = capitalized;
+      dirty = true;
+    }
   }
+
+  // Cargo: solo en construcción de primera persona. "soy/somos (la) directora" sí;
+  // "el acta es para la directora" o "una directora me consultó" NO.
   if (!directivoCtx.cargo) {
-    if (/vicedirectora?/i.test(text))   { directivoCtx.cargo = 'Vicedirectora/Vicedirector'; dirty = true; }
-    else if (/directora?/i.test(text))  { directivoCtx.cargo = 'Directora/Director';         dirty = true; }
-    else if (/secretari[ao]/i.test(text)){ directivoCtx.cargo = 'Secretaria/Secretario';      dirty = true; }
+    const cargoMatch = text.match(/\b(?:soy|somos)\s+(?:el|la|los?\s)?\s*(vicedirectora?|directora?|secretari[ao])\b/i);
+    if (cargoMatch) {
+      const c = cargoMatch[1].toLowerCase();
+      if (c.startsWith('vicedirec'))      { directivoCtx.cargo = 'Vicedirectora/Vicedirector'; dirty = true; }
+      else if (c.startsWith('direc'))     { directivoCtx.cargo = 'Directora/Director';          dirty = true; }
+      else if (c.startsWith('secretari')) { directivoCtx.cargo = 'Secretaria/Secretario';       dirty = true; }
+    }
   }
-  // v12.2 (Q2): persistir en localStorage para que la próxima sesión recuerde
+
   if (dirty && sessionPin) {
     try {
       localStorage.setItem(DIRECTIVO_STORAGE_KEY(sessionPin), JSON.stringify(directivoCtx));
@@ -1034,7 +1069,21 @@ function appendMessage(text, role) {
   }
   const wrap=document.createElement('div'); wrap.className='bubble-wrap';
   const bubble=document.createElement('div'); bubble.className='bubble';
-  bubble.innerHTML=renderText(text); wrap.appendChild(bubble);
+  // Q8 (v12.6): los documentos generados (actas, notas, PEI) se distinguen visualmente del chat
+  // conversacional. El directivo —usuario no técnico— necesita reconocer de un vistazo cuál de
+  // los mensajes es "el entregable" que va a descargar, no uno más de la charla.
+  const isDocMsg = role==='bot' && isDoc(text);
+  if(isDocMsg){
+    bubble.classList.add('bubble-doc');
+    const docHeader=document.createElement('div'); docHeader.className='doc-header';
+    docHeader.textContent='📄 Documento generado';
+    bubble.appendChild(docHeader);
+    const docBody=document.createElement('div'); docBody.innerHTML=renderText(text);
+    bubble.appendChild(docBody);
+  } else {
+    bubble.innerHTML=renderText(text);
+  }
+  wrap.appendChild(bubble);
   if(role==='bot'){
     const acts=document.createElement('div'); acts.className='bubble-actions';
     const cp=document.createElement('button'); cp.className='action-btn'; cp.innerHTML='📋 Copiar';
